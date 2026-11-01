@@ -1,0 +1,5 @@
+summary:{{ rbac_can('summary.view') ? 'yes' : 'no' }}
+export:{{ rbac_can('reports.export') ? 'yes' : 'no' }}
+triage:{{ rbac_can('project.issues.triage', project) ? 'yes' : 'no' }}
+route:{{ rbac_can_route('dashboard_summary') ? 'yes' : 'no' }}
+area:{{ rbac_can_area('product.summary') ? 'yes' : 'no' }}

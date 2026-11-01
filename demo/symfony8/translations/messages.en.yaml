@@ -1,0 +1,22 @@
+permission:
+    reports.view:
+        label: 'View reports'
+    reports.export:
+        label: 'Export reports'
+    project.view:
+        label: 'Open the project'
+    project.issues.triage:
+        label: 'Triage issues'
+    project.settings.view:
+        label: 'Open the project settings'
+    project.members.manage:
+        label: 'Manage the project members'
+permission_set:
+    viewer:
+        label: 'Viewer'
+    triage:
+        label: 'Triage'
+    auditor:
+        label: 'Auditor'
+    owner:
+        label: 'Owner'

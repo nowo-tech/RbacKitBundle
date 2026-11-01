@@ -1,0 +1,7 @@
+controllers:
+    resource: ../src/Controller/
+    type: attribute
+
+nowo_rbac_kit:
+    resource: .
+    type: nowo_rbac_kit

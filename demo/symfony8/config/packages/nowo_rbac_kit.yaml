@@ -1,0 +1,42 @@
+# RBAC Kit (demo). Every key: docs/CONFIGURATION.md of the bundle.
+nowo_rbac_kit:
+    catalogue:
+        translation_domain: messages
+        permissions:
+            reports.view: { scope: global, routes: [demo_reports], group: general }
+            reports.export: { scope: global, group: general }
+            project.view: { scope: context, routes: [demo_project], group: project }
+            project.issues.triage: { scope: context, group: project }
+            project.settings.view: { scope: context, routes: [demo_project_settings], group: project }
+            project.members.manage: { scope: context, group: project }
+        aliases:
+            reports: reports.view
+        open_routes: [demo_home]
+    # System sets (code => permissions). Roles are permission sets: two sets need not be comparable.
+    permission_sets:
+        viewer:
+            permissions: [reports.view, project.view]
+        triage:
+            permissions: [project.view, project.issues.triage]
+        auditor:
+            permissions: [reports.view, reports.export]
+        owner:
+            all: true
+            locked: true
+    # App\Demo\DemoGrantProvider: the sets each demo user holds, per project (memberships of a real app).
+    grant_provider: App\Demo\DemoGrantProvider
+    voter:
+        bypass_roles: [ROLE_ADMIN]
+    storage:
+        type: doctrine
+        usage_provider: App\Demo\DemoGrantProvider
+    request_guard:
+        enabled: true
+        context_resolver: App\Demo\RouteProjectResolver
+    coverage:
+        prefixes: [/projects, /reports]
+    web_ui:
+        enabled: true
+        path_prefix: /admin/rbac
+    security:
+        access_roles: [ROLE_ADMIN]

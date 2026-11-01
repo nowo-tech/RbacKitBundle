@@ -1,0 +1,71 @@
+# FrankenPHP worker mode audit (kernel not reset between requests)
+
+| Field | Value |
+|-------|-------|
+| Package | `nowo-tech/rbac-kit-bundle` (`symfony-bundle`) |
+| Audited revision | `1.0.0` (unreleased, branch `feat/1.0.0`) |
+| Audit date | 2026-11-01 |
+| Method | Manual review of every file under `src/`; PHPStan `ruleset-classic` + `ruleset-worker-strict` + `ruleset-hardening`; Igor (`composer igor`, 0 KO / 0 WARN); kernel test proving one grant load per request and a reload after `kernel.reset`; demo run in worker mode |
+| **Verdict** | ✅ **Viable** — four memo services (catalogue, permission sets, grants, decisions) implement `ResetInterface` and are tagged `kernel.reset`; every memo is keyed by user (never shared between users) and bounded; every other service is stateless |
+
+## Table of contents
+
+- [Execution model assumed](#execution-model-assumed)
+- [Summary](#summary)
+- [Services reviewed](#services-reviewed)
+- [Findings](#findings)
+- [Usage recommendations in worker mode](#usage-recommendations-in-worker-mode)
+- [Re-audit triggers](#re-audit-triggers)
+
+## Execution model assumed
+
+FrankenPHP worker mode boots the kernel once and serves many requests with the same container. Two scenarios are
+evaluated:
+
+- **A — kernel not rebooted, `services_resetter` still runs** (Symfony Runtime / FrankenPHP runtime default).
+- **B — no reset at all:** any state kept in a service survives into the next request.
+
+## Summary
+
+| Area | Status | Notes |
+|------|--------|-------|
+| Mutable state in shared services | ✅ | `PermissionCatalog`, `PermissionSetRegistry`, `GrantResolver`, `PermissionVoter` memoise per request (`@igor-ignore` with justification); route loader load-once flag (cache warm-up) |
+| `ResetInterface` / `kernel.reset` | ✅ | The four memo services; proven by `VoterIntegrationTest::grantsAreLoadedOncePerRequestAndResetBetweenRequests` |
+| Cross-user leakage | ✅ | Grants and decisions are keyed by user class + identifier (+ roles for decisions); a user never reads another user's memo |
+| Memory growth | ✅ | Bounded: catalogue `max_permissions`, stored sets `max_sets`, 64 users and `max_assignments` per user, 2048 decisions (memos are cleared when full) |
+| Static properties / `static` locals | ✅ | None |
+| Request / user captured in services | ✅ | `AccessGuard` reads `RequestStack::getMainRequest()` and the token per call and trusts the token only with a firewall context; the voter receives the token per call |
+| Superglobals, `putenv`, `ini_set`, `setlocale`, timezone | ✅ | None |
+| Doctrine | ✅ | Entity manager resolved per call from the registry (DoctrineBundle resets it between requests) |
+| Resources held open | ✅ | None |
+| Output, headers, `exit` | ✅ | Responses / console output only |
+| PHPStan FrankenPHP rulesets / Igor | ✅ | 0 errors / 0 KO |
+
+## Services reviewed
+
+| Service | State | Scenario A | Scenario B |
+|---------|-------|------------|------------|
+| `PermissionCatalog` | catalogue memo + route index | ✅ reset | ⚠️ provider changes seen after a restart only |
+| `PermissionSetRegistry` | sets memo, key sets | ✅ reset; the cache pool carries edits between workers | ⚠️ an edit made in another worker is seen after the memo is cleared |
+| `GrantResolver` | grants per user (bounded) | ✅ reset | ⚠️ membership changes seen when the memo is cleared (64 users) |
+| `PermissionVoter` | decisions (bounded) | ✅ reset | ⚠️ same as above (2048 decisions) |
+| `PermissionSetManager`, storages, `PermissionChecker`, `PermissionCoverage`, listeners, Twig / menu checkers, admin services, controller | none (`readonly` / stateless) | ✅ | ✅ |
+| `RbacRouteLoader` | `loaded` flag (cache warm-up only) | ✅ | ✅ |
+
+## Findings
+
+No worker-mode finding under scenario **A**. Under scenario **B** nothing leaks between users, but permission changes
+would be seen late (bounded memos): keep `kernel.reset` (the default of the Symfony and FrankenPHP runtimes).
+
+## Usage recommendations in worker mode
+
+- Keep the default `services_resetter` (do not disable `kernel.reset`).
+- Use a `storage.cache_pool` shared by every worker (filesystem on one host, Redis / Doctrine otherwise) so an edit made
+  in one worker reaches the others after their next reset.
+- Your `GrantProviderInterface`, `PermissionGateInterface` and `BypassVetoInterface` services must be stateless too (or
+  implement `ResetInterface`).
+
+## Re-audit triggers
+
+A new service with state, a new memo, a static property, a new integration (cache, Doctrine, request data), or a change
+of the decision memo key.

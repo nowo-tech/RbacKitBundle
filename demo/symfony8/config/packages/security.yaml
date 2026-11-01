@@ -1,0 +1,36 @@
+security:
+    password_hashers:
+        Symfony\Component\Security\Core\User\InMemoryUser: plaintext
+
+    role_hierarchy:
+        ROLE_ADMIN: [ROLE_USER]
+
+    # DEMO ONLY: well-known passwords, the demo binds to 127.0.0.1. Never copy these users to an application.
+    providers:
+        demo_users:
+            memory:
+                users:
+                    admin: { password: admin, roles: [ROLE_ADMIN] }
+                    alice: { password: alice, roles: [ROLE_USER] }
+                    bob: { password: bob, roles: [ROLE_USER] }
+                    carol: { password: carol, roles: [ROLE_USER] }
+
+    firewalls:
+        dev:
+            pattern: ^/(_profiler|_wdt|css|images|js)/
+            security: false
+        main:
+            lazy: true
+            provider: demo_users
+            http_basic:
+                realm: 'RBAC Kit demo (admin / alice / bob / carol, password = user name)'
+
+    # Layer 1 of REQ-UI-002: the firewall guards the admin prefix; the bundle checks security.access_roles again.
+    access_control:
+        - { path: ^/admin/rbac, roles: ROLE_ADMIN }
+        - { path: ^/(projects|reports|sign-in), roles: ROLE_USER }
+
+when@test:
+    security:
+        password_hashers:
+            Symfony\Component\Security\Core\User\InMemoryUser: plaintext

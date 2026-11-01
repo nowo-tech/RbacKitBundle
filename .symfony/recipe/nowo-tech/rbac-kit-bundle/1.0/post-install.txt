@@ -1,0 +1,14 @@
+Nowo RBAC Kit Bundle installed. Nothing is granted until you configure it (an empty catalogue denies everything).
+
+1. Catalogue your permissions and system sets in config/packages/nowo_rbac_kit.yaml
+   (catalogue.permissions, permission_sets) and point grant_provider at the service that lists the sets each
+   user holds (memberships). Check the coverage: php bin/console nowo:rbac:check --prefix=/dashboard
+2. Ask permissions in PHP (isGranted('permission:<key>', $context)) and Twig (rbac_can('<key>', context)).
+3. Admin UI (optional): set storage.type: doctrine and web_ui.enabled: true, create the table
+   (php bin/console doctrine:migrations:diff && php bin/console doctrine:migrations:migrate), then protect it:
+       security:
+           access_control:
+               - { path: ^/admin/rbac, roles: ROLE_ADMIN }
+   The admin routes are opt-in: config/routes/nowo_rbac_kit.yaml imports them.
+
+Docs: https://github.com/nowo-tech/RbacKitBundle/tree/main/docs

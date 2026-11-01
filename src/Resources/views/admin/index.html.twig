@@ -1,0 +1,12 @@
+{#
+  Permission set list (REQ-UI-003): UiKit list scaffold.
+  Variable: page (View\ListPage from RbacPageFactory::index(): header with the "new" action and the area nav, columns
+  code / name / kind / permissions (/ usage with a usage provider), row actions "edit" and "delete" (POST form with a
+  CSRF token bound to the set and a UiKit confirm dialog), empty state).
+  Data block: nowo_ui_list_row (kind badge; other cells as printed by _cells).
+#}
+{% extends '@NowoUiKit/page/list.html.twig' %}
+
+{% block nowo_ui_list_row %}
+    {{ include('@NowoRbacKitBundle/admin/_cells.html.twig', {columns: page.columns, row: row, bundle: page.bundle}, false) }}
+{% endblock %}

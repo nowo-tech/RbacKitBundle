@@ -1,0 +1,21 @@
+{#
+  Cells of one row of the permission set list and of the catalogue: `kind` (system | edited | custom | locked) and
+  `scope` (global | context) render as translated badges, labels are translated (|nowo_ui_trans), every other value is
+  printed escaped, empty values as a muted dash.
+  Required: columns (list<View\Column>), row (array). Optional: bundle.
+#}
+{% set _b = bundle|default(null) %}
+{% set _d = 'NowoRbacKitBundle' %}
+{% for column in columns %}
+    {%- set _value = row[column.key]|default(null) %}
+    {%- set _blank = _value is null or _value is same as('') %}
+    <td class="{{ nowo_ui_class('table_cell', _b) }}{{ _blank ? ' ' ~ nowo_ui_class('table_cell_muted', _b) }} nowo-ui-cell--{{ column.align }}" data-label="{{ column.label|nowo_ui_trans }}"{% if not column.required and column.priority and column.priority > 1 %} data-nowo-ui-priority="{{ column.priority }}"{% endif %}>
+        {%- if column.key == 'kind' and not _blank -%}
+            <span class="{{ nowo_ui_class(_value == 'custom' ? 'badge_success' : (_value == 'locked' ? 'badge_warning' : 'badge_neutral'), _b) }}" data-testid="rbac-kind">{{ ('kind.' ~ _value)|trans({}, _d) }}</span>
+        {%- elseif column.key == 'scope' and not _blank -%}
+            <span class="{{ nowo_ui_class(_value == 'context' ? 'badge_info' : 'badge_neutral', _b) }}">{{ ('scope.' ~ _value)|trans({}, _d) }}</span>
+        {%- else -%}
+            {{ _blank ? '—' : _value|nowo_ui_trans }}
+        {%- endif -%}
+    </td>
+{% endfor %}
