@@ -1,0 +1,3 @@
+nowo_rbac_kit:
+    resource: .
+    type: nowo_rbac_kit

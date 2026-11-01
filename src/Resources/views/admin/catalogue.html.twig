@@ -1,0 +1,11 @@
+{#
+  Permission catalogue (REQ-UI-003): UiKit list scaffold, read-only.
+  Variable: page (View\ListPage from RbacPageFactory::catalogue(): key, translated label, scope badge, group, the first
+  routes and the sets holding each permission).
+  Data block: nowo_ui_list_row (scope badge; other cells as printed by _cells).
+#}
+{% extends '@NowoUiKit/page/list.html.twig' %}
+
+{% block nowo_ui_list_row %}
+    {{ include('@NowoRbacKitBundle/admin/_cells.html.twig', {columns: page.columns, row: row, bundle: page.bundle}, false) }}
+{% endblock %}

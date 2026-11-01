@@ -1,0 +1,13 @@
+{% extends 'base.html.twig' %}
+
+{% block body %}
+    <h1 class="h3" data-testid="demo-reports">Reports</h1>
+    <p>A general page: shown when a global set grants <code>reports.view</code>, or at least one of your projects does.</p>
+    <p>Projects whose data this page may show:</p>
+    <ul>
+        {% for project in projects %}
+            {% if rbac_can('project.view', project) %}<li>{{ project.name }}</li>{% endif %}
+        {% endfor %}
+    </ul>
+    {% if rbac_can('reports.export') %}<p data-testid="demo-export">Export is available (<code>reports.export</code>).</p>{% endif %}
+{% endblock %}

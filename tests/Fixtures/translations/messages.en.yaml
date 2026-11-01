@@ -1,0 +1,22 @@
+permission:
+    summary.view:
+        label: 'View the summary'
+    reports.export:
+        label: 'Export reports'
+    wiki.manage:
+        label: 'Manage the wiki'
+    project.view:
+        label: 'Open the project'
+    project.issues.triage:
+        label: 'Triage issues'
+    project.settings.view:
+        label: 'Open the project settings'
+permission_set:
+    viewer:
+        label: 'Viewer'
+    triage:
+        label: 'Triage'
+    owner:
+        label: 'Owner'
+    auditor:
+        label: 'Auditor'
