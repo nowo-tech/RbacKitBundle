@@ -5,6 +5,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-02
+
+First release: permission catalogue, permission sets, typed contexts, memoised voter and admin UI (REQ-SEC-004 Appendix CI fixes included).
+
 ### Added
 
 - Permission catalogue from `catalogue.permissions` and tagged `PermissionProviderInterface` services: key, scope
