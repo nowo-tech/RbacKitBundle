@@ -28,7 +28,8 @@ in the host.
 2. **Global aggregation (H1)**. Remove `voter.global_aggregation`. For each global key that fronts a "general page
    showing the data of my contexts" (reports, summary, chat directory…), add `aggregate: true` to its catalogue entry
    and keep filtering its data with `PermissionChecker::filter()`. Do not flag platform keys (user administration,
-   billing, exports).
+   billing, exports). Asked with a context subject, an aggregate key is decided in that context
+   only (so `filter()` keeps the granting contexts); asked without one, any context of the user grants it.
 3. **Owner sets (H1)**. `all: true` now means every **context** key. A set meant to hold every key platform-wide (and
    assigned globally) needs `include_global: true`. Drop `except: [<global keys>]` entries that only existed to keep
    global keys out of an owner set.
@@ -40,7 +41,8 @@ in the host.
 5. **Admin managers (L6)**. `security.manage_roles` defaults to `[ROLE_ADMIN]`. Set it explicitly if another role
    managed sets through `access_roles`.
 6. **Deleting sets (L2)**. Configure `storage.usage_provider` to keep the delete action; without it custom sets cannot
-   be deleted. A code that is still assigned cannot be re-created until its assignments are removed.
+   be deleted. A code that is still assigned cannot be re-created until its assignments are removed. The usage provider
+   must count assignments by code even when no set with that code exists any more.
 7. **Cache and bounds (L3, L4)**. `storage.cache_ttl` (default 300) bounds how long a per-host cache serves a revoked
    key. If the table holds more rows than `storage.max_sets`, the registry throws: raise the bound or delete rows.
 8. **Gates and vetoes (L5)**. Vetoes are now asked on every decision of a bypass role; keep them cheap. Gates receiving

@@ -58,10 +58,29 @@ final class PermissionVoterTest extends TestCase
     {
         $voter = $this->voter();
         self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($this->token('alice'), null, ['permission:summary.view']), 'one context grants it');
-        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($this->token('alice'), new Project('x'), ['permission:summary.view']), 'the subject is ignored for global keys');
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($this->token('alice'), new Project('x'), ['permission:summary.view']), 'with a subject, an aggregate key is decided in that context');
         self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($this->token('alice'), null, ['permission:reports.export']));
         self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($this->token('bob'), null, ['permission:reports.export']), 'global assignment');
         self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($this->token('alice'), null, ['permission_route:dashboard_summary']));
+    }
+
+    /**
+     * Re-verification N1: an aggregate key asked with a context subject is decided in that context only.
+     */
+    #[Test]
+    public function aggregateKeysWithAContextSubjectAreDecidedInThatContext(): void
+    {
+        $this->provider = new MapGrantProvider(['alice' => [['viewer', 'billing']], 'gwen' => [['viewer', null]]]);
+        $voter          = $this->voter(roleGrants: ['ROLE_REPORTER' => ['summary.view']]);
+        $alice          = $this->token('alice');
+
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($alice, null, ['permission:summary.view']), 'without a subject: any context');
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($alice, new Project('billing'), ['permission:summary.view']));
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($alice, new Project('mobile'), ['permission:summary.view']), 'a non-granting context');
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($alice, new Project('billing', 'organization'), ['permission:summary.view']), 'same id, other type');
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($alice, new stdClass(), ['permission:summary.view']), 'a non-context subject: any context');
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($this->token('gwen'), new Project('mobile'), ['permission:summary.view']), 'a global assignment holds it everywhere');
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($this->token('rita', ['ROLE_REPORTER']), new Project('mobile'), ['permission:summary.view']), 'a role grant holds it everywhere');
     }
 
     /**
@@ -268,7 +287,7 @@ final class PermissionVoterTest extends TestCase
             {
                 ++$this->calls;
 
-                return (!$subject instanceof Project || $subject->id !== 'archived') && !($subject instanceof stdClass);
+                return (!$subject instanceof Project || $subject->id !== 'mobile') && !($subject instanceof stdClass);
             }
         };
         $veto = new class implements BypassVetoInterface {
@@ -282,8 +301,8 @@ final class PermissionVoterTest extends TestCase
         $voter = $this->voter(bypassRoles: ['ROLE_SUPER'], gates: [$gate], vetoes: [$veto]);
         $alice = $this->token('alice');
 
-        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($alice, new Project('live'), ['permission:summary.view']));
-        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($alice, new Project('archived'), ['permission:summary.view']), 'global key, other subject: asked again');
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($alice, new Project('billing'), ['permission:summary.view']));
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($alice, new Project('mobile'), ['permission:summary.view']), 'global key, other subject: the gate is asked again');
         self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($alice, new stdClass(), ['permission:summary.view']));
         self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($alice, new stdClass(), ['permission:summary.view']));
         self::assertSame(4, $gate->calls, 'non-context subjects are not memoised');

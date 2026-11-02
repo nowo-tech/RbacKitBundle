@@ -179,10 +179,14 @@ nowo_rbac_kit:
             reports.export: { scope: global }                # never promoted from a project-held set
 ```
 
-Show the data of the granting contexts only:
+Asked **without** a subject (`rbac_can('reports.view')`, the route guard, the menu) the key passes when any of the
+user's contexts grants it. Asked **with** a context subject (`rbac_can('reports.view', project)`,
+`isGranted('permission:reports.view', $project)`) it passes only when a set held in **that** context grants it (or the
+user holds the key platform-wide: role grant, global assignment, fallback set, bypass). Show the data of the granting
+contexts only:
 
 ```php
-$projects = $checker->filter($projectRepository->ofUser($user), 'reports.view');
+$projects = $checker->filter($projectRepository->ofUser($user), 'reports.view');   // only the granting projects
 ```
 
 `voter.fallback_permission_set` lets users without any assignment keep the general pages (a new account), and

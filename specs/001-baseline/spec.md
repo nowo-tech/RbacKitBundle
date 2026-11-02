@@ -39,8 +39,9 @@ coverage command; and a UiKit admin UI for the sets behind private access.
 ### US-2 — General pages by aggregation (P2)
 
 1. **Given** `reports.view` flagged `aggregate: true` and one context granting it, **When** a global check asks it,
-   **Then** it is granted and `PermissionChecker::filter()` returns only the granting contexts; a global key without
-   the flag is never granted by a context-held set.
+   **Then** it is granted; asked with a context subject it is decided in that context only, so
+   `PermissionChecker::filter()` returns only the granting contexts; a global key without the flag is never granted by
+   a context-held set.
 2. **Given** `fallback_permission_set: viewer`, **When** a user without any assignment asks a global key of `viewer`,
    **Then** it is granted.
 

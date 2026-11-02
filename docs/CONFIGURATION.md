@@ -97,8 +97,10 @@ never grants.
 - `scope: global` — asked without a subject (dashboards, reports, chat, global actions).
 - `scope: context` — asked with the context subject (`isGranted('permission:project.view', $project)`); asked without
   one, it is refused.
-- `aggregate: true` (global keys only) — the key is also granted when a set the user holds in **any** context contains
-  it: a general page (reports, summary) that shows the data of those contexts only (`PermissionChecker::filter()`).
+- `aggregate: true` (global keys only) — asked without a subject, the key is also granted when a set the user holds in
+  **any** context contains it (the general page opens); asked with a context subject — `PermissionChecker::filter()`,
+  `rbac_can(key, project)` — only the sets held in **that** context count, so the page shows the data of the granting
+  contexts only.
   Default `false`: a set held in a context never grants a global key. Never flag platform keys (user administration,
   billing, exports): every member of any context would hold them.
 

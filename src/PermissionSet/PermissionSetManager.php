@@ -81,6 +81,7 @@ final readonly class PermissionSetManager
 
         $keys = $this->known($permissions);
         $this->storage->save(new StoredPermissionSet($code, $this->name($name), $this->description($description), false, $keys, $this->actorId($actor), $this->clock?->now()));
+        $this->enforceBound($code);
 
         return $this->changed(PermissionSetChangedEvent::CREATED, $code, ['permissions' => count($keys), 'added' => $keys, 'removed' => []], $actor);
     }
@@ -105,6 +106,9 @@ final readonly class PermissionSetManager
 
         $keys = $this->known($permissions);
         $this->storage->save(new StoredPermissionSet($code, $this->name($name), $this->description($description), $set->system, $keys, $this->actorId($actor), $this->clock?->now()));
+        if (!$set->stored) {
+            $this->enforceBound($code);
+        }
 
         return $this->changed(PermissionSetChangedEvent::UPDATED, $code, [
             'permissions' => count($keys),
@@ -158,6 +162,23 @@ final readonly class PermissionSetManager
     public function canDelete(): bool
     {
         return $this->usage instanceof PermissionSetUsageInterface;
+    }
+
+    /**
+     * The bound is checked before saving without a lock: when concurrent creates pushed the table past
+     * `storage.max_sets`, the new row is removed again and the change is refused (the registry would otherwise throw on
+     * every read).
+     *
+     * @throws PermissionSetException
+     */
+    private function enforceBound(string $code): void
+    {
+        if ($this->registry->storedCount() > $this->maxSets) {
+            $this->storage->delete($code);
+            $this->registry->invalidate();
+
+            throw PermissionSetException::of(PermissionSetException::LIMIT);
+        }
     }
 
     /**

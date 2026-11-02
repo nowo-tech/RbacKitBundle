@@ -13,6 +13,7 @@ use Nowo\RbacKitBundle\Tests\Fixtures\EventRecorder;
 use Nowo\RbacKitBundle\Tests\Fixtures\StaticUsage;
 use Nowo\RbacKitBundle\Tests\Support\Catalogues;
 use Nowo\RbacKitBundle\Tests\Support\MemoryStorage;
+use Nowo\RbacKitBundle\Tests\Support\RacingStorage;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -20,6 +21,7 @@ use Psr\Clock\ClockInterface;
 use stdClass;
 use Symfony\Component\Security\Core\User\InMemoryUser;
 
+use function array_keys;
 use function str_repeat;
 
 final class PermissionSetManagerTest extends TestCase
@@ -180,6 +182,34 @@ final class PermissionSetManagerTest extends TestCase
             }
         }
         self::assertSame('Renamed', $manager->update('in_use', 'Renamed', null, [])->name, 'editing a stored row is not bounded');
+    }
+
+    /**
+     * Re-verification N2: a concurrent create between the bound check and the save must not leave the table above
+     * storage.max_sets (the registry would throw on every read): the new row is rolled back and the change refused.
+     */
+    #[Test]
+    public function aConcurrentCreateCannotPushTheTablePastTheBound(): void
+    {
+        foreach ([static fn (PermissionSetManager $m): mixed => $m->create('custom', 'Name', null, []), static fn (PermissionSetManager $m): mixed => $m->update('viewer', 'Name', null, [])] as $change) {
+            $inner    = new MemoryStorage([new StoredPermissionSet('in_use', 'Used', null, false, ['summary.view'])]);
+            $storage  = new RacingStorage($inner, new StoredPermissionSet('racer', 'Racer', null, false, []));
+            $registry = Catalogues::registry($storage);
+            $manager  = new PermissionSetManager($registry, Catalogues::catalog(), $storage, 2, $this->events, new StaticUsage());
+            try {
+                $change($manager);
+                self::fail('the bound is enforced after the save');
+            } catch (PermissionSetException $e) {
+                self::assertSame(PermissionSetException::LIMIT, $e->reason);
+            }
+            self::assertSame(['in_use', 'racer'], array_keys($inner->rows), 'the row of this request is rolled back');
+            self::assertArrayHasKey('racer', $registry->all(), 'the registry reads the table without overflowing');
+        }
+        self::assertSame([], $this->events->events);
+
+        $quiet   = new RacingStorage(new MemoryStorage(), new StoredPermissionSet('racer', 'Racer', null, false, []));
+        $manager = new PermissionSetManager(Catalogues::registry($quiet), Catalogues::catalog(), $quiet, 2, null, new StaticUsage());
+        self::assertSame('custom', $manager->create('custom', 'Name', null, [])->code, 'within the bound the race is harmless');
     }
 
     #[Test]
