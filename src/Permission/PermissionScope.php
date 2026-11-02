@@ -11,7 +11,8 @@ enum PermissionScope: string
 {
     /**
      * Outside any context (a dashboard, a report, a global action): granted by a global assignment, a
-     * `role_grants` entry, or — with `voter.global_aggregation` — when at least one of the user's contexts grants it.
+     * `role_grants` entry, the fallback set or — only for keys flagged `aggregate` — when at least one of the user's
+     * contexts grants it.
      */
     case Global = 'global';
 

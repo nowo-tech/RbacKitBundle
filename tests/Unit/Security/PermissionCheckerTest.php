@@ -5,15 +5,24 @@ declare(strict_types=1);
 namespace Nowo\RbacKitBundle\Tests\Unit\Security;
 
 use Nowo\DashboardMenuBundle\Entity\MenuItem;
+use Nowo\RbacKitBundle\Context\DefaultContextResolver;
+use Nowo\RbacKitBundle\Grant\GrantResolver;
 use Nowo\RbacKitBundle\Menu\RbacMenuPermissionChecker;
 use Nowo\RbacKitBundle\Security\PermissionChecker;
+use Nowo\RbacKitBundle\Security\PermissionVoter;
+use Nowo\RbacKitBundle\Tests\Fixtures\MapGrantProvider;
 use Nowo\RbacKitBundle\Tests\Fixtures\Project;
 use Nowo\RbacKitBundle\Tests\Support\Catalogues;
 use Nowo\RbacKitBundle\Twig\RbacTwigExtension;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorage;
+use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 use Symfony\Component\Security\Core\Authorization\AccessDecision;
+use Symfony\Component\Security\Core\Authorization\AccessDecisionManager;
+use Symfony\Component\Security\Core\Authorization\AuthorizationChecker;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
+use Symfony\Component\Security\Core\User\InMemoryUser;
 use Twig\Environment;
 use Twig\Loader\ArrayLoader;
 
@@ -45,6 +54,29 @@ final class PermissionCheckerTest extends TestCase
         self::assertFalse($withoutSecurity->canRoute('dashboard_summary'));
     }
 
+    /**
+     * Re-verification N1: with the real voter, an `aggregate` key asked with a context is decided in that context, so
+     * filter() and rbac_can(key, project) keep only the granting contexts; asked without a context it aggregates.
+     */
+    #[Test]
+    public function aggregateKeysAreDecidedInTheGivenContext(): void
+    {
+        $projects = [new Project('billing'), new Project('mobile'), new Project('acme-hr')];
+
+        $alice = $this->realChecker('alice');
+        self::assertTrue($alice->can('summary.view'), 'the general page opens');
+        self::assertTrue($alice->can('summary.view', $projects[0]));
+        self::assertFalse($alice->can('summary.view', $projects[1]), 'a context that does not grant the key');
+        self::assertSame([$projects[0]], $alice->filter($projects, 'summary.view'));
+
+        $twig = new Environment(new ArrayLoader(['t' => "{% for p in projects %}{{ rbac_can('summary.view', p) ? 'y' : 'n' }}{% endfor %}{{ rbac_can('summary.view') ? 'y' : 'n' }}"]));
+        $twig->addExtension(new RbacTwigExtension($alice));
+        self::assertSame('ynny', $twig->render('t', ['projects' => $projects]));
+
+        self::assertSame($projects, $this->realChecker('gwen')->filter($projects, 'summary.view'), 'a global holder sees every context');
+        self::assertSame([], $this->realChecker('nobody')->filter($projects, 'summary.view'));
+    }
+
     #[Test]
     public function twigFunctionsUseTheChecker(): void
     {
@@ -68,6 +100,18 @@ final class PermissionCheckerTest extends TestCase
         self::assertTrue($menu->canView($this->item(null, ['project.view']), new Project('billing')), 'the menu context is the voter subject');
         self::assertFalse($menu->canView($this->item(null, ['project.view']), 'not an object'));
         self::assertFalse((new RbacMenuPermissionChecker(new PermissionChecker(Catalogues::catalog())))->canView($this->item(null, ['ROLE_ADMIN'])));
+    }
+
+    private function realChecker(string $user): PermissionChecker
+    {
+        $catalog  = Catalogues::catalog();
+        $registry = Catalogues::registry(null, $catalog);
+        $provider = new MapGrantProvider(['alice' => [['viewer', 'billing']], 'gwen' => [['viewer', null]]]);
+        $voter    = new PermissionVoter($catalog, new GrantResolver($provider, $registry), $registry, new DefaultContextResolver());
+        $tokens   = new TokenStorage();
+        $tokens->setToken(new UsernamePasswordToken(new InMemoryUser($user, null, ['ROLE_USER']), 'main', ['ROLE_USER']));
+
+        return new PermissionChecker($catalog, new AuthorizationChecker($tokens, new AccessDecisionManager([$voter])));
     }
 
     /**

@@ -13,8 +13,9 @@ use function sprintf;
 use function strlen;
 
 /**
- * One catalogued permission key: its scope, the routes it guards, an optional group (admin UI ordering) and its
- * translation keys. Immutable and validated: a key outside {@see self::KEY_PATTERN} is refused.
+ * One catalogued permission key: its scope, the routes it guards, an optional group (admin UI ordering), its
+ * translation keys and whether a global key aggregates the user's contexts. Immutable and validated: a key outside
+ * {@see self::KEY_PATTERN}, or a context key flagged `aggregate`, is refused.
  */
 final readonly class Permission
 {
@@ -37,6 +38,8 @@ final readonly class Permission
      * @param string|null $group group shown in the admin UI (free text or translation key)
      * @param string|null $label translation key of the label (null = `permission.<key>.label`)
      * @param string|null $description translation key of the description (null = `permission.<key>.description`)
+     * @param bool $aggregate global keys only: also granted when a set the user holds in **any** context contains it
+     *                        (general pages that show the data of those contexts; opt in per key, never by default)
      */
     public function __construct(
         public string $key,
@@ -45,9 +48,13 @@ final readonly class Permission
         public ?string $group = null,
         public ?string $label = null,
         public ?string $description = null,
+        public bool $aggregate = false,
     ) {
         if (!self::isValidKey($key)) {
             throw new InvalidArgumentException(sprintf('Invalid permission key "%s": expected lowercase segments separated by ".", "-" or ":" (at most %d characters).', $key, self::KEY_MAX_LENGTH));
+        }
+        if ($aggregate && $scope !== PermissionScope::Global) {
+            throw new InvalidArgumentException(sprintf('Permission "%s": only global permissions can aggregate the user\'s contexts.', $key));
         }
 
         $list = [];
@@ -94,6 +101,7 @@ final readonly class Permission
             && $this->routes === $other->routes
             && $this->group === $other->group
             && $this->label === $other->label
-            && $this->description === $other->description;
+            && $this->description === $other->description
+            && $this->aggregate === $other->aggregate;
     }
 }

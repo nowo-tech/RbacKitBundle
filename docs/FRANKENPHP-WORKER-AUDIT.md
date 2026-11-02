@@ -31,7 +31,7 @@ evaluated:
 |------|--------|-------|
 | Mutable state in shared services | ✅ | `PermissionCatalog`, `PermissionSetRegistry`, `GrantResolver`, `PermissionVoter` memoise per request (`@igor-ignore` with justification); route loader load-once flag (cache warm-up) |
 | `ResetInterface` / `kernel.reset` | ✅ | The four memo services; proven by `VoterIntegrationTest::grantsAreLoadedOncePerRequestAndResetBetweenRequests` |
-| Cross-user leakage | ✅ | Grants and decisions are keyed by user class + identifier (+ roles for decisions); a user never reads another user's memo |
+| Cross-user leakage | ✅ | Grants and decisions are keyed by user class + identifier (+ roles, typed context id and veto state for decisions; non-context subjects are not memoised); a user never reads another user's memo |
 | Memory growth | ✅ | Bounded: catalogue `max_permissions`, stored sets `max_sets`, 64 users and `max_assignments` per user, 2048 decisions (memos are cleared when full) |
 | Static properties / `static` locals | ✅ | None |
 | Request / user captured in services | ✅ | `AccessGuard` reads `RequestStack::getMainRequest()` and the token per call and trusts the token only with a firewall context; the voter receives the token per call |
@@ -46,7 +46,7 @@ evaluated:
 | Service | State | Scenario A | Scenario B |
 |---------|-------|------------|------------|
 | `PermissionCatalog` | catalogue memo + route index | ✅ reset | ⚠️ provider changes seen after a restart only |
-| `PermissionSetRegistry` | sets memo, key sets | ✅ reset; the cache pool carries edits between workers | ⚠️ an edit made in another worker is seen after the memo is cleared |
+| `PermissionSetRegistry` | sets memo, key sets | ✅ reset; the cache pool carries edits between workers (entry expires after `storage.cache_ttl`) | ⚠️ an edit made in another worker is seen after the memo is cleared |
 | `GrantResolver` | grants per user (bounded) | ✅ reset | ⚠️ membership changes seen when the memo is cleared (64 users) |
 | `PermissionVoter` | decisions (bounded) | ✅ reset | ⚠️ same as above (2048 decisions) |
 | `PermissionSetManager`, storages, `PermissionChecker`, `PermissionCoverage`, listeners, Twig / menu checkers, admin services, controller | none (`readonly` / stateless) | ✅ | ✅ |
@@ -61,7 +61,8 @@ would be seen late (bounded memos): keep `kernel.reset` (the default of the Symf
 
 - Keep the default `services_resetter` (do not disable `kernel.reset`).
 - Use a `storage.cache_pool` shared by every worker (filesystem on one host, Redis / Doctrine otherwise) so an edit made
-  in one worker reaches the others after their next reset.
+  in one worker reaches the others after their next reset; with a per-host pool the cached rows expire after
+  `storage.cache_ttl` (default 300 s).
 - Your `GrantProviderInterface`, `PermissionGateInterface` and `BypassVetoInterface` services must be stateless too (or
   implement `ResetInterface`).
 

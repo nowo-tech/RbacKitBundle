@@ -8,8 +8,11 @@ use Nowo\RbacKitBundle\Grant\Assignment;
 use Nowo\RbacKitBundle\Grant\GrantProviderInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 
+use function str_contains;
+
 /**
- * Grant provider of the tests: user identifier => list of [set, context id|null]; counts its calls.
+ * Grant provider of the tests: user identifier => list of [set, context|null]; counts its calls. A context without a
+ * type (`billing`) is a project (`project:billing`); a typed one (`organization:5`) is used as is.
  */
 final class MapGrantProvider implements GrantProviderInterface
 {
@@ -31,7 +34,11 @@ final class MapGrantProvider implements GrantProviderInterface
         ++$this->calls;
         $identifier = $user instanceof UserInterface ? $user->getUserIdentifier() : '';
         foreach ($this->map[$identifier] ?? [] as [$set, $context]) {
-            yield new Assignment($set, $context);
+            yield match (true) {
+                $context === null           => Assignment::global($set),
+                str_contains($context, ':') => new Assignment($set, $context),
+                default                     => Assignment::in($set, 'project', $context),
+            };
         }
     }
 }

@@ -70,6 +70,8 @@ error:
     locked: 'This permission set is locked in the configuration.'
     system: 'System permission sets cannot be deleted.'
     in_use: 'This permission set is still assigned and cannot be deleted.'
+    code_assigned: 'This code is still held by assignments (a deleted set?): remove them before creating a set with this code.'
+    usage_unknown: 'Custom sets can only be deleted with a usage provider (storage.usage_provider) that confirms they are no longer assigned.'
     not_found: 'Unknown permission set.'
     limit: 'The maximum number of stored permission sets is reached.'
     read_only: 'Permission sets are read-only (storage.type: config).'

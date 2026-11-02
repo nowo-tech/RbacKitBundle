@@ -118,7 +118,14 @@ final class Configuration implements ConfigurationInterface
                             ->scalarNode('group')->info('Group shown in the admin catalogue.')->defaultNull()->end()
                             ->scalarNode('label')->info('Translation key of the label; null = permission.<key>.label.')->defaultNull()->end()
                             ->scalarNode('description')->info('Translation key of the description; null = permission.<key>.description.')->defaultNull()->end()
+                            ->booleanNode('aggregate')->info('Global keys only: true = also granted when a set the user holds in any context contains it (general pages that show the data of those contexts). Default false: a context-held set never grants a global key.')->defaultFalse()->end()
                         ->end()
+                    ->end()
+                    ->validate()
+                        ->ifTrue(static fn (array $v): bool => self::aggregatingContextKeys($v) !== [])
+                        ->then(static function (array $v): never {
+                            throw new InvalidConfigurationException(sprintf('nowo_rbac_kit.catalogue.permissions "%s": aggregate is only allowed on global permissions.', implode('", "', self::aggregatingContextKeys($v))));
+                        })
                     ->end()
                     ->validate()
                         ->ifTrue(static fn (array $v): bool => array_filter(array_keys($v), static fn (int|string $key): bool => !Permission::isValidKey((string) $key)) !== [])
@@ -153,10 +160,15 @@ final class Configuration implements ConfigurationInterface
                     ->scalarNode('label')->info('Translation key of the name (catalogue domain); null = permission_set.<code>.label.')->defaultNull()->end()
                     ->scalarNode('description')->info('Description (translation key or text).')->defaultNull()->end()
                     ->arrayNode('permissions')->info('Permission keys of the set.')->scalarPrototype()->cannotBeEmpty()->end()->end()
-                    ->booleanNode('all')->info('true = every catalogued permission (minus except), e.g. an owner set.')->defaultFalse()->end()
+                    ->booleanNode('all')->info('true = every catalogued **context** permission (minus except), e.g. an owner set held in a context.')->defaultFalse()->end()
+                    ->booleanNode('include_global')->info('With all: true, also every catalogued global permission (a platform-wide set assigned globally only). Default false: an owner set held in a context never carries global keys.')->defaultFalse()->end()
                     ->arrayNode('except')->info('Keys left out of an "all" set.')->scalarPrototype()->cannotBeEmpty()->end()->end()
                     ->booleanNode('locked')->info('true = not editable from the admin UI (stored edits are ignored).')->defaultFalse()->end()
                 ->end()
+            ->end()
+            ->validate()
+                ->ifTrue(static fn (array $v): bool => array_filter($v, static fn (mixed $set): bool => is_array($set) && ($set['include_global'] ?? false) === true && ($set['all'] ?? false) !== true) !== [])
+                ->thenInvalid('nowo_rbac_kit.permission_sets include_global needs all: true, got %s.')
             ->end()
             ->validate()
                 ->ifTrue(static fn (array $v): bool => array_filter(array_keys($v), static fn (int|string $code): bool => preg_match(PermissionSetManager::CODE_PATTERN, (string) $code) !== 1) !== [])
@@ -192,10 +204,6 @@ final class Configuration implements ConfigurationInterface
                         ->thenInvalid('nowo_rbac_kit.voter.bypass_roles must list ROLE_* names, got %s.')
                     ->end()
                 ->end()
-                ->booleanNode('global_aggregation')
-                    ->info('true = a global permission passes when at least one of the user\'s contexts grants it (general pages that aggregate their contexts).')
-                    ->defaultTrue()
-                ->end()
                 ->scalarNode('fallback_permission_set')->info('Set whose global permissions a user without any assignment holds (e.g. a brand-new account); null = none.')->defaultNull()->end()
                 ->integerNode('max_assignments')->info('Assignments read per user and request; the rest are ignored (logged).')->defaultValue(5000)->min(1)->max(100_000)->end()
             ->end();
@@ -213,9 +221,10 @@ final class Configuration implements ConfigurationInterface
                     ->defaultValue('config')
                 ->end()
                 ->scalarNode('service')->info('Service id implementing PermissionSetStorageInterface (storage.type: service).')->defaultNull()->end()
-                ->scalarNode('cache_pool')->info('Cache pool (Symfony\\Contracts\\Cache\\CacheInterface) holding the stored rows; null = read the storage once per request.')->defaultValue('cache.app')->end()
-                ->integerNode('max_sets')->info('Upper bound of stored rows (custom sets + edits): reads are limited and creation is refused beyond it.')->defaultValue(200)->min(1)->max(5000)->end()
-                ->scalarNode('usage_provider')->info('Service id implementing PermissionSetUsageInterface (assignment counts; deletion of a set in use is refused).')->defaultNull()->end()
+                ->scalarNode('cache_pool')->info('Cache pool (Symfony\\Contracts\\Cache\\CacheInterface) holding the stored rows; null = read the storage once per request. Share it between web hosts.')->defaultValue('cache.app')->end()
+                ->integerNode('cache_ttl')->info('Seconds the cached rows live: the longest a change made on another host (with a per-host pool) takes to be seen.')->defaultValue(300)->min(1)->max(86_400)->end()
+                ->integerNode('max_sets')->info('Upper bound of stored rows (custom sets + edits): creation is refused beyond it, and a table holding more rows is an error (nothing is silently dropped).')->defaultValue(200)->min(1)->max(5000)->end()
+                ->scalarNode('usage_provider')->info('Service id implementing PermissionSetUsageInterface (assignment counts). Without it custom sets cannot be deleted; with it a set in use cannot be deleted and a code still assigned cannot be re-created.')->defaultNull()->end()
             ->end()
             ->validate()
                 ->ifTrue(static fn (array $v): bool => ($v['type'] ?? null) === 'service' && (!is_string($v['service'] ?? null) || trim($v['service']) === ''))
@@ -246,8 +255,8 @@ final class Configuration implements ConfigurationInterface
             ->addDefaultsIfNotSet()
             ->children()
                 ->booleanNode('enabled')->defaultFalse()->end()
-                ->scalarNode('context_resolver')->info('Service id implementing RequestContextResolverInterface (the context of a request); null = context routes are left to their controllers.')->defaultNull()->end()
-                ->booleanNode('skip_strangers')->info('true = users holding no set in the request\'s context are left to the controller (its 404 / share-link answer).')->defaultTrue()->end()
+                ->scalarNode('context_resolver')->info('Service id implementing RequestContextResolverInterface (the context of a request); null = no request has a context (context routes are refused unless skip_strangers or the route default _rbac_guard: false).')->defaultNull()->end()
+                ->booleanNode('skip_strangers')->info('true = users holding no set in the request\'s context, and requests whose context is not resolved, are left to the controller (its 404 / share-link answer). Default false: refused (403).')->defaultFalse()->end()
             ->end();
     }
 
@@ -305,17 +314,36 @@ final class Configuration implements ConfigurationInterface
                     ->defaultValue(['ROLE_ADMIN'])
                 ->end()
                 ->arrayNode('manage_roles')
-                    ->info('Roles allowed to create / edit / delete sets. Unset (null) = access_roles.')
+                    ->info('Roles allowed to create / edit / delete sets (root-equivalent over the catalogue). Independent of access_roles; never empty.')
                     ->scalarPrototype()->end()
-                    ->defaultNull()
+                    ->defaultValue(['ROLE_ADMIN'])
                 ->end()
                 ->scalarNode('access_checker')->info('Service id implementing RbacAdminAccessCheckerInterface; null = role-based default.')->defaultNull()->end()
                 ->booleanNode('allow_unauthenticated')->info('DEV / DEMO only (refused without kernel.debug): open the admin UI without login.')->defaultFalse()->end()
             ->end()
             ->validate()
-                ->ifTrue(static fn (array $v): bool => !self::hasCustomAccess($v) && (self::strings($v['access_roles'] ?? []) === [] || (is_array($v['manage_roles'] ?? null) && self::strings($v['manage_roles']) === [])))
-                ->thenInvalid('nowo_rbac_kit.security.access_roles (and manage_roles when set) must contain at least one non-empty role when no access_checker is set and allow_unauthenticated is false (an empty list would deny everybody).')
+                ->ifTrue(static fn (array $v): bool => !self::hasCustomAccess($v) && (self::strings($v['access_roles'] ?? []) === [] || self::strings($v['manage_roles'] ?? []) === []))
+                ->thenInvalid('nowo_rbac_kit.security.access_roles and manage_roles must contain at least one non-empty role when no access_checker is set and allow_unauthenticated is false (an empty list would deny everybody).')
             ->end();
+    }
+
+    /**
+     * Context-scoped keys flagged `aggregate` (refused).
+     *
+     * @param array<int|string, mixed> $permissions
+     *
+     * @return list<string>
+     */
+    private static function aggregatingContextKeys(array $permissions): array
+    {
+        $keys = [];
+        foreach ($permissions as $key => $definition) {
+            if (is_array($definition) && ($definition['aggregate'] ?? false) === true && ($definition['scope'] ?? null) !== PermissionScope::Global->value) {
+                $keys[] = (string) $key;
+            }
+        }
+
+        return $keys;
     }
 
     /**

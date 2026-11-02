@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace Nowo\RbacKitBundle\PermissionSet;
 
+use Nowo\RbacKitBundle\Permission\Permission;
 use Nowo\RbacKitBundle\Permission\PermissionCatalog;
+use Nowo\RbacKitBundle\Permission\PermissionScope;
+use OverflowException;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Contracts\Service\ResetInterface;
 
 use function array_diff;
@@ -16,8 +20,10 @@ use function array_intersect;
 use function array_keys;
 use function array_map;
 use function array_values;
+use function count;
 use function implode;
 use function is_array;
+use function sprintf;
 use function strcmp;
 use function uasort;
 
@@ -26,8 +32,10 @@ use function uasort;
  * their stored edit when one exists (unless `locked`), then the custom sets from the storage, ordered by name.
  *
  * Permissions are always intersected with the catalogue: a key that is not (or no longer) catalogued grants nothing
- * (fail closed, logged once per request). Read once per request from an optional cache entry of the whole (bounded)
- * table, rebuilt after a change ({@see self::invalidate()}); {@see self::reset()} clears the per-request memo.
+ * (fail closed, logged once per request). An `all` set holds every **context** key (plus the global ones only with
+ * `include_global`). Read once per request from an optional cache entry of the whole (bounded) table that lives
+ * `storage.cache_ttl` seconds and is rebuilt after a change ({@see self::invalidate()}); a table holding more than
+ * `storage.max_sets` rows is an error (no row is silently dropped). {@see self::reset()} clears the per-request memo.
  */
 final class PermissionSetRegistry implements ResetInterface
 {
@@ -41,8 +49,9 @@ final class PermissionSetRegistry implements ResetInterface
     private array $keySets = [];
 
     /**
-     * @param array<string, array{label: string|null, description: string|null, permissions: list<string>, all: bool, except: list<string>, locked: bool}> $systemSets configured sets
-     * @param int $maxSets upper bound of stored rows read (`storage.max_sets`)
+     * @param array<string, array{label: string|null, description: string|null, permissions: list<string>, all: bool, include_global?: bool, except: list<string>, locked: bool}> $systemSets configured sets
+     * @param int $maxSets upper bound of stored rows (`storage.max_sets`); more rows in the storage is an error
+     * @param int $cacheTtl seconds the cache entry lives (`storage.cache_ttl`)
      */
     public function __construct(
         private readonly PermissionCatalog $catalog,
@@ -51,6 +60,7 @@ final class PermissionSetRegistry implements ResetInterface
         private readonly ?CacheInterface $cache = null,
         private readonly int $maxSets = 200,
         private readonly ?LoggerInterface $logger = null,
+        private readonly int $cacheTtl = 300,
     ) {
     }
 
@@ -84,6 +94,7 @@ final class PermissionSetRegistry implements ResetInterface
         }
 
         $catalogue = array_keys($this->catalog->all());
+        $context   = array_keys(array_filter($this->catalog->all(), static fn (Permission $permission): bool => $permission->scope === PermissionScope::Context));
         $stored    = [];
         foreach ($this->rows() as $row) {
             $stored[$row->code] = $row;
@@ -94,7 +105,7 @@ final class PermissionSetRegistry implements ResetInterface
         foreach ($this->systemSets as $code => $definition) {
             $row = $definition['locked'] ? null : ($stored[$code] ?? null);
             unset($stored[$code]);
-            $requested   = $row instanceof StoredPermissionSet ? $row->permissions : ($definition['all'] ? array_values(array_diff($catalogue, $definition['except'])) : $definition['permissions']);
+            $requested   = $row instanceof StoredPermissionSet ? $row->permissions : ($definition['all'] ? array_values(array_diff(($definition['include_global'] ?? false) ? $catalogue : $context, $definition['except'])) : $definition['permissions']);
             $sets[$code] = new PermissionSet(
                 $code,
                 $row?->name,
@@ -168,12 +179,35 @@ final class PermissionSetRegistry implements ResetInterface
     private function rows(): array
     {
         if (!$this->cache instanceof CacheInterface) {
-            return $this->storage->load($this->maxSets);
+            return $this->load();
         }
 
-        $cached = $this->cache->get(self::CACHE_KEY, fn (): array => array_map(static fn (StoredPermissionSet $row): array => $row->toArray(), $this->storage->load($this->maxSets)));
+        $cached = $this->cache->get(self::CACHE_KEY, function (ItemInterface $item): array {
+            $item->expiresAfter($this->cacheTtl);
+
+            return array_map(static fn (StoredPermissionSet $row): array => $row->toArray(), $this->load());
+        });
 
         return is_array($cached) ? array_values(array_filter(array_map(StoredPermissionSet::fromArray(...), $cached))) : [];
+    }
+
+    /**
+     * The stored rows; more than `storage.max_sets` is refused (a dropped row could revert a narrowed system set).
+     *
+     * @throws OverflowException
+     *
+     * @return list<StoredPermissionSet>
+     */
+    private function load(): array
+    {
+        $rows = $this->storage->load($this->maxSets + 1);
+        if (count($rows) > $this->maxSets) {
+            $this->logger?->critical('RbacKit: the permission set storage holds more rows than storage.max_sets.', ['limit' => $this->maxSets]);
+
+            throw new OverflowException(sprintf('RbacKit: the permission set storage holds more than storage.max_sets (%d) rows; raise storage.max_sets or delete rows. No row is ignored silently: a dropped edit could restore broader permissions.', $this->maxSets));
+        }
+
+        return $rows;
     }
 
     /**

@@ -54,6 +54,7 @@ final class NowoRbacKitExtensionTest extends TestCase
         self::assertFalse($voter->getArgument(8), 'unmapped routes are denied');
         self::assertTrue($container->getDefinition(PermissionSetRegistry::class)->hasTag('kernel.reset'));
         self::assertEquals(new Reference('cache.app'), $container->getDefinition(PermissionSetRegistry::class)->getArgument(3));
+        self::assertSame(300, $container->getDefinition(PermissionSetRegistry::class)->getArgument(6), 'storage.cache_ttl');
     }
 
     #[Test]

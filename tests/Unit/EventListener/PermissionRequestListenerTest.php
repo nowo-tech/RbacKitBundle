@@ -44,8 +44,21 @@ final class PermissionRequestListenerTest extends TestCase
         $listener($this->event('home'));
         $listener($this->event(null));
         $listener($this->event('dashboard_summary', HttpKernelInterface::SUB_REQUEST));
-        $this->listener(null)($this->event('dashboard_summary'));
+        $this->listener(null)($this->event('home'));
+        $this->listener(null)($this->event('dashboard_summary', optOut: true));
+        $this->listener('alice')($this->event('project_settings', optOut: true));
         self::assertSame([], $this->asked->getArrayCopy());
+    }
+
+    /**
+     * Appendix CI L1: guests are refused on catalogued routes (the firewall turns it into its entry point).
+     */
+    #[Test]
+    public function guestsAreRefusedOnGuardedRoutes(): void
+    {
+        $this->expectException(AccessDeniedException::class);
+        $this->expectExceptionMessage('authentication required');
+        $this->listener(null)($this->event('dashboard_summary'));
     }
 
     #[Test]
@@ -60,15 +73,28 @@ final class PermissionRequestListenerTest extends TestCase
     }
 
     #[Test]
-    public function contextRoutesAreLeftToTheControllerWithoutAContextOrForStrangers(): void
+    public function withSkipStrangersContextRoutesAreLeftToTheControllerWithoutAContextOrForStrangers(): void
     {
-        $this->listener('alice', [])($this->event('project_settings'));
-        $this->listener('alice', [], new Project('other'))($this->event('project_settings'));
-        $this->listener('alice', ['permission:project.view'], new Project('billing'))($this->event('project_show'));
+        $this->listener('alice', [], null, true)($this->event('project_settings'));
+        $this->listener('alice', [], new Project('other'), true)($this->event('project_settings'));
+        $this->listener('alice', ['permission:project.view'], new Project('billing'), true)($this->event('project_show'));
         self::assertSame(['permission:project.view'], $this->asked->getArrayCopy());
+    }
+
+    /**
+     * Appendix CI L1: by default strangers and unresolved contexts are refused.
+     */
+    #[Test]
+    public function strangersAreRefusedByDefault(): void
+    {
+        try {
+            $this->listener('alice', [], new Project('other'))($this->event('project_settings'));
+            self::fail('a stranger must be refused');
+        } catch (AccessDeniedException) {
+        }
 
         $this->expectException(AccessDeniedException::class);
-        $this->listener('alice', [], new Project('other'), false)($this->event('project_settings'));
+        $this->listener('alice')($this->event('project_settings'));
     }
 
     #[Test]
@@ -81,7 +107,7 @@ final class PermissionRequestListenerTest extends TestCase
     /**
      * @param list<string> $granted
      */
-    private function listener(?string $user, array $granted = [], ?Project $context = null, bool $skipStrangers = true): PermissionRequestListener
+    private function listener(?string $user, array $granted = [], ?Project $context = null, bool $skipStrangers = false): PermissionRequestListener
     {
         $tokens = new TokenStorage();
         if (is_string($user)) {
@@ -117,11 +143,14 @@ final class PermissionRequestListenerTest extends TestCase
         return new PermissionRequestListener(Catalogues::catalog(), $authorization, $tokens, $contexts, new DefaultContextResolver(), new GrantResolver(new MapGrantProvider(), Catalogues::registry()), $skipStrangers);
     }
 
-    private function event(?string $route, int $type = HttpKernelInterface::MAIN_REQUEST): ControllerEvent
+    private function event(?string $route, int $type = HttpKernelInterface::MAIN_REQUEST, bool $optOut = false): ControllerEvent
     {
         $request = Request::create('/');
         if ($route !== null) {
             $request->attributes->set('_route', $route);
+        }
+        if ($optOut) {
+            $request->attributes->set(PermissionRequestListener::ROUTE_OPT_OUT, false);
         }
 
         return new ControllerEvent($this->createStub(HttpKernelInterface::class), static fn (): null => null, $request, $type);

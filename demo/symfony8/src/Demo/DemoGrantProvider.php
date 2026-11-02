@@ -27,7 +27,7 @@ final class DemoGrantProvider implements GrantProviderInterface, PermissionSetUs
     {
         $identifier = $user instanceof UserInterface ? $user->getUserIdentifier() : '';
         foreach (self::ASSIGNMENTS[$identifier] ?? [] as [$set, $context]) {
-            yield new Assignment($set, $context);
+            yield $context === null ? Assignment::global($set) : Assignment::in($set, DemoProject::TYPE, $context);
         }
     }
 

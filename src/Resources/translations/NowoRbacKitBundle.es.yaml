@@ -70,6 +70,8 @@ error:
     locked: 'Este conjunto de permisos está bloqueado en la configuración.'
     system: 'Los conjuntos de permisos de sistema no se pueden eliminar.'
     in_use: 'Este conjunto de permisos sigue asignado y no se puede eliminar.'
+    code_assigned: 'Este código aún tiene asignaciones (¿un conjunto eliminado?): elimínalas antes de crear un conjunto con este código.'
+    usage_unknown: 'Los conjuntos personalizados solo se pueden eliminar con un proveedor de uso (storage.usage_provider) que confirme que ya no están asignados.'
     not_found: 'Conjunto de permisos desconocido.'
     limit: 'Se ha alcanzado el número máximo de conjuntos de permisos guardados.'
     read_only: 'Los conjuntos de permisos son de solo lectura (storage.type: config).'

@@ -4,25 +4,26 @@ nowo_rbac_kit:
     catalogue:
         translation_domain: messages
         permissions: {}
-        # reports.view: { scope: global, routes: [app_reports] }
+        # reports.view: { scope: global, routes: [app_reports], aggregate: true }   # aggregate: opt in per key
         # project.view: { scope: context, routes: [app_project_show] }
         open_routes: []
         unmapped_routes: deny
     permission_sets: {}
     #     viewer: { permissions: [reports.view, project.view] }
-    #     owner: { all: true, locked: true }
-    # grant_provider: App\Security\MembershipGrantProvider
+    #     owner: { all: true, locked: true }   # all = every context key (global keys: include_global: true)
+    # grant_provider: App\Security\MembershipGrantProvider   # Assignment::in('owner', 'project', $id): typed context ids
     voter:
         bypass_roles: []
-        global_aggregation: true
     storage:
         type: config            # doctrine = editable sets in the admin UI
     request_guard:
         enabled: false
+        skip_strangers: false   # strangers to a context and guests are refused (403 / login)
     web_ui:
         enabled: false
         path_prefix: /admin/rbac
     security:
         access_roles: [ROLE_ADMIN]
+        manage_roles: [ROLE_ADMIN]   # create / edit / delete: root-equivalent over the catalogue
         # DEV/DEMO only — never enable in production (refused without kernel.debug):
         allow_unauthenticated: false

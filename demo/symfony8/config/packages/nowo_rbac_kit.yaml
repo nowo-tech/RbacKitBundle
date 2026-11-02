@@ -3,7 +3,9 @@ nowo_rbac_kit:
     catalogue:
         translation_domain: messages
         permissions:
-            reports.view: { scope: global, routes: [demo_reports], group: general }
+            # aggregate: a global key also granted when one of the user's projects grants it (a general page showing the
+            # data of those projects). Opt in per key: reports.export is NOT promoted from a project-held set.
+            reports.view: { scope: global, routes: [demo_reports], group: general, aggregate: true }
             reports.export: { scope: global, group: general }
             project.view: { scope: context, routes: [demo_project], group: project }
             project.issues.triage: { scope: context, group: project }
@@ -20,10 +22,12 @@ nowo_rbac_kit:
             permissions: [project.view, project.issues.triage]
         auditor:
             permissions: [reports.view, reports.export]
+        # all: true = every *context* key (global keys need include_global: true): owning a project never grants a
+        # platform-wide permission.
         owner:
             all: true
             locked: true
-    # App\Demo\DemoGrantProvider: the sets each demo user holds, per project (memberships of a real app).
+    # App\Demo\DemoGrantProvider: the sets each demo user holds, per project (typed context ids: project:<slug>).
     grant_provider: App\Demo\DemoGrantProvider
     voter:
         bypass_roles: [ROLE_ADMIN]

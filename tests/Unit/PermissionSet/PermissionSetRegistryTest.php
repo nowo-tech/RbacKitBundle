@@ -11,8 +11,10 @@ use Nowo\RbacKitBundle\PermissionSet\PermissionSetRegistry;
 use Nowo\RbacKitBundle\PermissionSet\StoredPermissionSet;
 use Nowo\RbacKitBundle\Tests\Support\Catalogues;
 use Nowo\RbacKitBundle\Tests\Support\MemoryStorage;
+use OverflowException;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use Psr\Clock\ClockInterface;
 use Psr\Log\AbstractLogger;
 use Stringable;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
@@ -50,7 +52,7 @@ final class PermissionSetRegistryTest extends TestCase
         self::assertFalse($owner->stored, 'a locked set ignores its stored row');
         self::assertNull($owner->name);
         self::assertSame('permission_set.owner.label', $owner->labelKey());
-        self::assertSame(['reports.export', 'summary.view', 'project.issues.triage', 'project.settings.view', 'project.view'], $owner->permissions, 'all minus except, catalogue order');
+        self::assertSame(['project.issues.triage', 'project.settings.view', 'project.view'], $owner->permissions, 'H1: all = every context key (minus except), catalogue order');
 
         self::assertSame(['summary.view', 'project.view'], $sets['beta']->permissions, 'catalogue order');
         self::assertSame('admin', $sets['zeta']->updatedBy);
@@ -78,7 +80,7 @@ final class PermissionSetRegistryTest extends TestCase
             }
         };
         $registry = new PermissionSetRegistry(Catalogues::catalog(), new MemoryStorage([new StoredPermissionSet('custom', 'Custom', null, false, ['gone.key', 'summary.view'])]), [
-            'viewer' => ['label' => 'Viewers', 'description' => null, 'permissions' => ['summary.view', 'removed.key'], 'all' => false, 'except' => [], 'locked' => false],
+            'viewer' => ['label' => 'Viewers', 'description' => null, 'permissions' => ['summary.view', 'removed.key'], 'all' => false, 'include_global' => false, 'except' => [], 'locked' => false],
         ], null, 200, $logger);
 
         self::assertSame(['summary.view'], $registry->find('viewer')?->permissions);
@@ -110,6 +112,77 @@ final class PermissionSetRegistryTest extends TestCase
         $registry->invalidate();
         $cache->get(PermissionSetRegistry::CACHE_KEY, static fn (): string => 'corrupted');
         self::assertNull($registry->find('custom'), 'a corrupted entry grants nothing');
+    }
+
+    #[Test]
+    public function anAllSetIncludesGlobalKeysOnlyWhenAskedTo(): void
+    {
+        $registry = new PermissionSetRegistry(Catalogues::catalog(), new MemoryStorage(), ['root' => Catalogues::set([], true, ['wiki.manage'], true, true)]);
+        self::assertSame(['reports.export', 'summary.view', 'project.issues.triage', 'project.settings.view', 'project.view'], $registry->find('root')?->permissions);
+    }
+
+    /**
+     * Appendix CI L3: the cache entry expires after storage.cache_ttl, so a per-host pool sees a revocation.
+     */
+    #[Test]
+    public function theCacheEntryExpires(): void
+    {
+        $clock = new class implements ClockInterface {
+            public DateTimeImmutable $now;
+
+            public function __construct()
+            {
+                $this->now = new DateTimeImmutable('2026-11-01T10:00:00+00:00');
+            }
+
+            public function now(): DateTimeImmutable
+            {
+                return $this->now;
+            }
+        };
+        $storage  = new MemoryStorage([new StoredPermissionSet('viewer', 'Viewer', null, true, ['summary.view', 'project.view'])]);
+        $registry = new PermissionSetRegistry(Catalogues::catalog(), $storage, Catalogues::sets(), new ArrayAdapter(clock: $clock), 200, null, 60);
+        self::assertSame(['summary.view', 'project.view'], $registry->find('viewer')?->permissions);
+
+        $storage->save(new StoredPermissionSet('viewer', 'Viewer', null, true, ['project.view'])); // another host
+        $registry->reset();
+        self::assertSame(['summary.view', 'project.view'], $registry->find('viewer')?->permissions, 'still cached');
+
+        $clock->now = $clock->now->modify('+61 seconds');
+        $registry->reset();
+        self::assertSame(['project.view'], $registry->find('viewer')?->permissions, 'the revocation is seen after the TTL');
+    }
+
+    /**
+     * Appendix CI L4: a storage holding more rows than storage.max_sets is an error, never a silent drop that would
+     * restore a narrowed system set.
+     */
+    #[Test]
+    public function rowsBeyondMaxSetsAreRefused(): void
+    {
+        $logger = new class extends AbstractLogger {
+            public int $critical = 0;
+
+            public function log($level, string|Stringable $message, array $context = []): void
+            {
+                ++$this->critical;
+            }
+        };
+        $storage = new MemoryStorage([
+            new StoredPermissionSet('aa', 'A', null, false, []),
+            new StoredPermissionSet('ab', 'B', null, false, []),
+            new StoredPermissionSet('viewer', 'Narrowed', null, true, ['project.view']),
+        ]);
+        self::assertSame(['project.view'], (new PermissionSetRegistry(Catalogues::catalog(), $storage, Catalogues::sets(), null, 3))->find('viewer')?->permissions, 'exactly max_sets rows');
+
+        $registry = new PermissionSetRegistry(Catalogues::catalog(), $storage, Catalogues::sets(), new ArrayAdapter(), 2, $logger);
+        try {
+            $registry->find('viewer');
+            self::fail('overflow');
+        } catch (OverflowException $e) {
+            self::assertStringContainsString('storage.max_sets (2)', $e->getMessage());
+        }
+        self::assertSame(1, $logger->critical);
     }
 
     #[Test]

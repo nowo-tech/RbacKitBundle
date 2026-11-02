@@ -70,6 +70,8 @@ error:
     locked: 'Cet ensemble de permissions est verrouillé dans la configuration.'
     system: 'Les ensembles de permissions système ne peuvent pas être supprimés.'
     in_use: 'Cet ensemble de permissions est encore attribué et ne peut pas être supprimé.'
+    code_assigned: 'Ce code est encore utilisé par des affectations (un ensemble supprimé ?) : retirez-les avant de créer un ensemble avec ce code.'
+    usage_unknown: 'Les ensembles personnalisés ne peuvent être supprimés qu''avec un fournisseur d''usage (storage.usage_provider) qui confirme qu''ils ne sont plus affectés.'
     not_found: 'Ensemble de permissions inconnu.'
     limit: 'Le nombre maximal d''ensembles de permissions enregistrés est atteint.'
     read_only: 'Les ensembles de permissions sont en lecture seule (storage.type: config).'

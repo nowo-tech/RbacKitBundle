@@ -212,7 +212,7 @@ final class PermissionSetController extends AbstractController
      */
     private function formResponse(FormInterface $form, ?PermissionSet $set): Response
     {
-        return $this->render($this->pages->template('form'), ['page' => $this->pages->form($form->createView(), $set)], new Response(null, $form->isSubmitted() ? Response::HTTP_UNPROCESSABLE_ENTITY : Response::HTTP_OK));
+        return $this->render($this->pages->template('form'), ['page' => $this->pages->form($form->createView(), $set, $this->manager->canDelete())], new Response(null, $form->isSubmitted() ? Response::HTTP_UNPROCESSABLE_ENTITY : Response::HTTP_OK));
     }
 
     /**

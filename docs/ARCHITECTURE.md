@@ -36,8 +36,9 @@ CLI nowo:rbac:check ──► PermissionCoverage (router routes × catalogue × 
 
 See the diagram in [USAGE.md](USAGE.md#decision-order): empty catalogue, unknown key / unmapped route, guest and a
 context key without a resolvable context deny first; then gates; then bypass roles (unless vetoed); then the sets held
-in the context (context keys) or role grants, global sets, aggregation and the fallback set (global keys). One provider
-call per user and request; one decision per (user, roles, key, context) and request.
+in the context (typed context id, context keys) or role grants, global sets, `aggregate`-flagged keys held in a
+context and the fallback set (global keys). One provider call per user and request; one decision per (user, roles, key,
+typed context id, veto state) and request.
 
 ## Admin request flow
 
@@ -56,7 +57,7 @@ call per user and request; one decision per (user, roles, key, context) and requ
 | `Permission\` | `Permission`, `PermissionScope`, `PermissionCatalog`, `PermissionProviderInterface`, `ConfigPermissionProvider` |
 | `PermissionSet\` | `PermissionSet` (view), `StoredPermissionSet` (row), `PermissionSetRegistry`, `PermissionSetManager`, storages (`Config…`, `Doctrine…`), `PermissionSetUsageInterface`, `PermissionSetException` |
 | `Grant\` | `Assignment`, `GrantProviderInterface`, `NullGrantProvider`, `GrantResolver` |
-| `Context\` | `RbacContextInterface`, `ContextResolverInterface` (+ default), `RequestContextResolverInterface` (+ null) |
+| `Context\` | `RbacContextInterface`, `ContextId` (typed ids `<type>:<id>`), `ContextResolverInterface` (+ default), `RequestContextResolverInterface` (+ null) |
 | `Security\` | `PermissionVoter`, `PermissionChecker`, `PermissionGateInterface`, `BypassVetoInterface`, admin `AccessGuard` and access checkers |
 | `EventListener\` | `PermissionRequestListener` (request guard), `RbacAdminAccessListener` |
 | `Coverage\`, `Command\` | `PermissionCoverage`, `CoverageReport`, `nowo:rbac:check` |

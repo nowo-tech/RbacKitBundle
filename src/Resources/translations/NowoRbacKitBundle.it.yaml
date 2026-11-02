@@ -70,6 +70,8 @@ error:
     locked: 'Questo insieme di permessi è bloccato nella configurazione.'
     system: 'Gli insiemi di permessi di sistema non possono essere eliminati.'
     in_use: 'Questo insieme di permessi è ancora assegnato e non può essere eliminato.'
+    code_assigned: 'Questo codice è ancora usato da assegnazioni (un insieme eliminato?): rimuovile prima di creare un insieme con questo codice.'
+    usage_unknown: 'Gli insiemi personalizzati si possono eliminare solo con un provider di utilizzo (storage.usage_provider) che confermi che non sono più assegnati.'
     not_found: 'Insieme di permessi sconosciuto.'
     limit: 'È stato raggiunto il numero massimo di insiemi di permessi salvati.'
     read_only: 'Gli insiemi di permessi sono di sola lettura (storage.type: config).'

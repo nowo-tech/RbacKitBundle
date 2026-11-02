@@ -24,7 +24,9 @@ use function trim;
 
 /**
  * Creates, edits and deletes permission sets. System sets can be edited (their first edit stores a row over the
- * configured default) but not deleted; `locked` sets cannot be changed; a set in use cannot be deleted. Every change
+ * configured default) but not deleted; `locked` sets cannot be changed. Deleting a custom set needs the usage provider
+ * (`storage.usage_provider`) and is refused while the set is assigned; a code that is still assigned (stale host
+ * assignments) cannot be created, so a re-created code never inherits old holders. Every change
  * is validated against the catalogue, bounded by `storage.max_sets`, refreshes the {@see PermissionSetRegistry} and
  * dispatches a {@see PermissionSetChangedEvent}. Stateless.
  */
@@ -70,12 +72,17 @@ final readonly class PermissionSetManager
         if ($this->registry->find($code) instanceof PermissionSet) {
             throw PermissionSetException::of(PermissionSetException::CODE_TAKEN);
         }
+        if ($this->assignments($code) > 0) {
+            throw PermissionSetException::of(PermissionSetException::CODE_ASSIGNED);
+        }
         if ($this->registry->storedCount() >= $this->maxSets) {
             throw PermissionSetException::of(PermissionSetException::LIMIT);
         }
 
         $keys = $this->known($permissions);
-        $this->storage->save(new StoredPermissionSet($code, $this->name($name), $this->description($description), false, $keys, $this->actorId($actor), $this->clock?->now()));
+        $row  = new StoredPermissionSet($code, $this->name($name), $this->description($description), false, $keys, $this->actorId($actor), $this->clock?->now());
+        $this->storage->save($row);
+        $this->enforceBound($row);
 
         return $this->changed(PermissionSetChangedEvent::CREATED, $code, ['permissions' => count($keys), 'added' => $keys, 'removed' => []], $actor);
     }
@@ -99,7 +106,11 @@ final readonly class PermissionSetManager
         }
 
         $keys = $this->known($permissions);
-        $this->storage->save(new StoredPermissionSet($code, $this->name($name), $this->description($description), $set->system, $keys, $this->actorId($actor), $this->clock?->now()));
+        $row  = new StoredPermissionSet($code, $this->name($name), $this->description($description), $set->system, $keys, $this->actorId($actor), $this->clock?->now());
+        $this->storage->save($row);
+        if (!$set->stored) {
+            $this->enforceBound($row);
+        }
 
         return $this->changed(PermissionSetChangedEvent::UPDATED, $code, [
             'permissions' => count($keys),
@@ -123,7 +134,10 @@ final readonly class PermissionSetManager
         if ($set->system) {
             throw PermissionSetException::of(PermissionSetException::SYSTEM);
         }
-        if (($this->usage?->usageCounts([$code])[$code] ?? 0) > 0) {
+        if (!$this->usage instanceof PermissionSetUsageInterface) {
+            throw PermissionSetException::of(PermissionSetException::USAGE_UNKNOWN);
+        }
+        if ($this->assignments($code) > 0) {
             throw PermissionSetException::of(PermissionSetException::IN_USE);
         }
 
@@ -142,6 +156,55 @@ final readonly class PermissionSetManager
         $this->events?->dispatch(new PermissionSetChangedEvent($action, $code, ['name' => $set->name] + $context, $actor));
 
         return $set;
+    }
+
+    /**
+     * Whether custom sets can be deleted (a usage provider tells whether they are still assigned).
+     */
+    public function canDelete(): bool
+    {
+        return $this->usage instanceof PermissionSetUsageInterface;
+    }
+
+    /**
+     * The bound is checked before saving without a lock: when concurrent creates pushed the table past
+     * `storage.max_sets`, the row this request wrote is removed again and the change is refused (the registry would
+     * otherwise throw on every read). Only the row this request wrote is removed: when another manager's write replaced
+     * it (same code, other content), that row is kept.
+     *
+     * @throws PermissionSetException
+     */
+    private function enforceBound(StoredPermissionSet $saved): void
+    {
+        $stored = $this->registry->storedCount();
+        if ($stored <= $this->maxSets) {
+            return;
+        }
+
+        foreach ($this->storage->load($stored) as $row) {
+            if ($row->code === $saved->code && $this->sameContent($row, $saved)) {
+                $this->storage->delete($saved->code);
+            }
+        }
+        $this->registry->invalidate();
+
+        throw PermissionSetException::of(PermissionSetException::LIMIT);
+    }
+
+    /**
+     * Whether a stored row is the one this request wrote (the storage may set its own timestamp).
+     */
+    private function sameContent(StoredPermissionSet $a, StoredPermissionSet $b): bool
+    {
+        return [$a->name, $a->description, $a->system, $a->permissions, $a->updatedBy] === [$b->name, $b->description, $b->system, $b->permissions, $b->updatedBy];
+    }
+
+    /**
+     * Assignments of a code according to the usage provider (0 without one).
+     */
+    private function assignments(string $code): int
+    {
+        return $this->usage?->usageCounts([$code])[$code] ?? 0;
     }
 
     private function requireWritable(): void

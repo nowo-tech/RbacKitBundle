@@ -67,7 +67,8 @@ final readonly class RbacPageFactory
 
     /**
      * Permission set list: code, name, kind badge, permission count and (with a usage provider) the assignment count.
-     * Managers on a writable storage get "new", "edit" (unlocked sets) and "delete" (custom sets, POST + CSRF + confirm).
+     * Managers on a writable storage get "new", "edit" (unlocked sets) and — with a usage provider — "delete" (custom
+     * sets, POST + CSRF + confirm).
      *
      * @param array<string, PermissionSet> $sets
      * @param array<string, int>|null $usage assignment counts (null = no usage provider)
@@ -83,7 +84,7 @@ final readonly class RbacPageFactory
                 'permissions' => count($set->permissions),
                 'usage'       => $usage === null ? null : ($usage[$code] ?? 0),
                 'editable'    => $canManage && $writable && !$set->locked,
-                'deletable'   => $canManage && $writable && !$set->locked && !$set->system,
+                'deletable'   => $canManage && $writable && $usage !== null && !$set->locked && !$set->system,
             ];
         }
 
@@ -172,9 +173,11 @@ final readonly class RbacPageFactory
     }
 
     /**
-     * Create (`$set` null) or edit form; an editable custom set gets the delete zone.
+     * Create (`$set` null) or edit form; an editable custom set gets the delete zone when sets can be deleted.
+     *
+     * @param bool $deletable custom sets can be deleted (a usage provider is configured)
      */
-    public function form(FormView $form, ?PermissionSet $set): FormPage
+    public function form(FormView $form, ?PermissionSet $set, bool $deletable = true): FormPage
     {
         $title = $set instanceof PermissionSet ? RbacPages::label('form.title_edit', ['%code%' => $set->code]) : RbacPages::label('form.title_new');
         $intro = RbacPages::label($set instanceof PermissionSet ? $set->system ? 'form.intro_system' : 'form.intro_edit' : ('form.intro_new'));
@@ -186,7 +189,7 @@ final readonly class RbacPageFactory
             submitLabel: RbacPages::label($set instanceof PermissionSet ? 'action.save' : 'action.create'),
             cancelHref: $back,
             cancelLabel: RbacPages::label('action.cancel'),
-            deleteAction: $set instanceof PermissionSet && !$set->system && !$set->locked ? $this->deleteAction($set->code) : null,
+            deleteAction: $deletable && $set instanceof PermissionSet && !$set->system && !$set->locked ? $this->deleteAction($set->code) : null,
             bundle: RbacPages::BUNDLE,
             layout: $this->pages->layout(),
             attributes: ['data-testid' => 'rbac-form'],
