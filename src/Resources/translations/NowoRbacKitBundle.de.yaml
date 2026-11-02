@@ -70,6 +70,8 @@ error:
     locked: 'Dieser Berechtigungssatz ist in der Konfiguration gesperrt.'
     system: 'System-Berechtigungssätze können nicht gelöscht werden.'
     in_use: 'Dieser Berechtigungssatz ist noch zugewiesen und kann nicht gelöscht werden.'
+    code_assigned: 'Dieser Code ist noch Zuweisungen zugeordnet (ein gelöschtes Set?): Entfernen Sie diese, bevor Sie ein Set mit diesem Code anlegen.'
+    usage_unknown: 'Eigene Sets können nur mit einem Nutzungsanbieter (storage.usage_provider) gelöscht werden, der bestätigt, dass sie nicht mehr zugewiesen sind.'
     not_found: 'Unbekannter Berechtigungssatz.'
     limit: 'Die maximale Anzahl gespeicherter Berechtigungssätze ist erreicht.'
     read_only: 'Berechtigungssätze sind schreibgeschützt (storage.type: config).'

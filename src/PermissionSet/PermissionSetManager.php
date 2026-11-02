@@ -24,7 +24,9 @@ use function trim;
 
 /**
  * Creates, edits and deletes permission sets. System sets can be edited (their first edit stores a row over the
- * configured default) but not deleted; `locked` sets cannot be changed; a set in use cannot be deleted. Every change
+ * configured default) but not deleted; `locked` sets cannot be changed. Deleting a custom set needs the usage provider
+ * (`storage.usage_provider`) and is refused while the set is assigned; a code that is still assigned (stale host
+ * assignments) cannot be created, so a re-created code never inherits old holders. Every change
  * is validated against the catalogue, bounded by `storage.max_sets`, refreshes the {@see PermissionSetRegistry} and
  * dispatches a {@see PermissionSetChangedEvent}. Stateless.
  */
@@ -69,6 +71,9 @@ final readonly class PermissionSetManager
         }
         if ($this->registry->find($code) instanceof PermissionSet) {
             throw PermissionSetException::of(PermissionSetException::CODE_TAKEN);
+        }
+        if ($this->assignments($code) > 0) {
+            throw PermissionSetException::of(PermissionSetException::CODE_ASSIGNED);
         }
         if ($this->registry->storedCount() >= $this->maxSets) {
             throw PermissionSetException::of(PermissionSetException::LIMIT);
@@ -123,7 +128,10 @@ final readonly class PermissionSetManager
         if ($set->system) {
             throw PermissionSetException::of(PermissionSetException::SYSTEM);
         }
-        if (($this->usage?->usageCounts([$code])[$code] ?? 0) > 0) {
+        if (!$this->usage instanceof PermissionSetUsageInterface) {
+            throw PermissionSetException::of(PermissionSetException::USAGE_UNKNOWN);
+        }
+        if ($this->assignments($code) > 0) {
             throw PermissionSetException::of(PermissionSetException::IN_USE);
         }
 
@@ -142,6 +150,22 @@ final readonly class PermissionSetManager
         $this->events?->dispatch(new PermissionSetChangedEvent($action, $code, ['name' => $set->name] + $context, $actor));
 
         return $set;
+    }
+
+    /**
+     * Whether custom sets can be deleted (a usage provider tells whether they are still assigned).
+     */
+    public function canDelete(): bool
+    {
+        return $this->usage instanceof PermissionSetUsageInterface;
+    }
+
+    /**
+     * Assignments of a code according to the usage provider (0 without one).
+     */
+    private function assignments(string $code): int
+    {
+        return $this->usage?->usageCounts([$code])[$code] ?? 0;
     }
 
     private function requireWritable(): void

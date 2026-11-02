@@ -6,7 +6,8 @@ test.describe('Permissions of alice (viewer of both projects, triage in Billing)
   test.use(as('alice'));
 
   test('the matrix is the union of her sets in each project', async ({ page }) => {
-    await page.goto('/');
+    // The home page is public: /sign-in (access_control) makes the browser authenticate, then redirects home.
+    await page.goto('/sign-in');
     const billing = page.locator('[data-testid="demo-matrix"] tr[data-project="billing"]');
     const mobile = page.locator('[data-testid="demo-matrix"] tr[data-project="mobile"]');
     await expect(billing.locator('td').nth(1)).toHaveText('✓');
@@ -29,6 +30,22 @@ test.describe('Permissions of bob (global auditor)', () => {
     await page.goto('/reports');
     await expect(page.getByTestId('demo-export')).toBeVisible();
     expect((await page.goto('/projects/mobile'))?.status()).toBe(403);
+  });
+});
+
+test.describe('Permissions of carol (owner of Mobile only)', () => {
+  test.use(as('carol'));
+
+  test('owning a project grants no platform-wide permission', async ({ page }) => {
+    await page.goto('/sign-in');
+    const general = page.getByTestId('demo-general');
+    await expect(general).toContainText('Export reports: no');
+    await expect(general).toContainText('View reports: no');
+    const mobile = page.locator('[data-testid="demo-matrix"] tr[data-project="mobile"]');
+    await expect(mobile.locator('td').nth(3)).toHaveText('✓');
+    expect((await page.goto('/reports'))?.status()).toBe(403);
+    expect((await page.goto('/projects/mobile/settings'))?.status()).toBe(200);
+    expect((await page.goto('/projects/billing'))?.status()).toBe(403);
   });
 });
 

@@ -1569,6 +1569,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             group?: scalar|Param|null, // Group shown in the admin catalogue. // Default: null
  *             label?: scalar|Param|null, // Translation key of the label; null = permission.<key>.label. // Default: null
  *             description?: scalar|Param|null, // Translation key of the description; null = permission.<key>.description. // Default: null
+ *             aggregate?: bool|Param, // Global keys only: true = also granted when a set the user holds in any context contains it (general pages that show the data of those contexts). Default false: a context-held set never grants a global key. // Default: false
  *         }>,
  *         aliases?: array<string, scalar|Param|null>,
  *         open_routes?: list<scalar|Param|null>,
@@ -1578,14 +1579,14 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         label?: scalar|Param|null, // Translation key of the name (catalogue domain); null = permission_set.<code>.label. // Default: null
  *         description?: scalar|Param|null, // Description (translation key or text). // Default: null
  *         permissions?: list<scalar|Param|null>,
- *         all?: bool|Param, // true = every catalogued permission (minus except), e.g. an owner set. // Default: false
+ *         all?: bool|Param, // true = every catalogued **context** permission (minus except), e.g. an owner set held in a context. // Default: false
+ *         include_global?: bool|Param, // With all: true, also every catalogued global permission (a platform-wide set assigned globally only). Default false: an owner set held in a context never carries global keys. // Default: false
  *         except?: list<scalar|Param|null>,
  *         locked?: bool|Param, // true = not editable from the admin UI (stored edits are ignored). // Default: false
  *     }>,
  *     role_grants?: array<string, list<scalar|Param|null>>,
  *     voter?: array{
  *         bypass_roles?: list<scalar|Param|null>,
- *         global_aggregation?: bool|Param, // true = a global permission passes when at least one of the user's contexts grants it (general pages that aggregate their contexts). // Default: true
  *         fallback_permission_set?: scalar|Param|null, // Set whose global permissions a user without any assignment holds (e.g. a brand-new account); null = none. // Default: null
  *         max_assignments?: int|Param, // Assignments read per user and request; the rest are ignored (logged). // Default: 5000
  *     },
@@ -1594,17 +1595,18 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     storage?: array{ // Where custom sets and edits of system sets live.
  *         type?: "config"|"doctrine"|"service"|Param, // config = read-only (system sets only, default); doctrine = the bundle entity (table rbac_permission_set); service = storage.service. // Default: "config"
  *         service?: scalar|Param|null, // Service id implementing PermissionSetStorageInterface (storage.type: service). // Default: null
- *         cache_pool?: scalar|Param|null, // Cache pool (Symfony\Contracts\Cache\CacheInterface) holding the stored rows; null = read the storage once per request. // Default: "cache.app"
- *         max_sets?: int|Param, // Upper bound of stored rows (custom sets + edits): reads are limited and creation is refused beyond it. // Default: 200
- *         usage_provider?: scalar|Param|null, // Service id implementing PermissionSetUsageInterface (assignment counts; deletion of a set in use is refused). // Default: null
+ *         cache_pool?: scalar|Param|null, // Cache pool (Symfony\Contracts\Cache\CacheInterface) holding the stored rows; null = read the storage once per request. Share it between web hosts. // Default: "cache.app"
+ *         cache_ttl?: int|Param, // Seconds the cached rows live: the longest a change made on another host (with a per-host pool) takes to be seen. // Default: 300
+ *         max_sets?: int|Param, // Upper bound of stored rows (custom sets + edits): creation is refused beyond it, and a table holding more rows is an error (nothing is silently dropped). // Default: 200
+ *         usage_provider?: scalar|Param|null, // Service id implementing PermissionSetUsageInterface (assignment counts). Without it custom sets cannot be deleted; with it a set in use cannot be deleted and a code still assigned cannot be re-created. // Default: null
  *     },
  *     doctrine?: array{
  *         table_prefix?: scalar|Param|null, // Prefix of the bundle table and index names (REQ-ORM-002): "app_" gives app_rbac_permission_set. // Default: ""
  *     },
  *     request_guard?: array{ // Opt-in listener refusing (403) a catalogued route before its controller when its permission is not granted.
  *         enabled?: bool|Param, // Default: false
- *         context_resolver?: scalar|Param|null, // Service id implementing RequestContextResolverInterface (the context of a request); null = context routes are left to their controllers. // Default: null
- *         skip_strangers?: bool|Param, // true = users holding no set in the request's context are left to the controller (its 404 / share-link answer). // Default: true
+ *         context_resolver?: scalar|Param|null, // Service id implementing RequestContextResolverInterface (the context of a request); null = no request has a context (context routes are refused unless skip_strangers or the route default _rbac_guard: false). // Default: null
+ *         skip_strangers?: bool|Param, // true = users holding no set in the request's context, and requests whose context is not resolved, are left to the controller (its 404 / share-link answer). Default false: refused (403). // Default: false
  *     },
  *     coverage?: array{ // Defaults of nowo:rbac:check / PermissionCoverage.
  *         prefixes?: list<scalar|Param|null>,
@@ -1618,7 +1620,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     },
  *     security?: array{ // REQ-UI-002 private access of the admin UI.
  *         access_roles?: list<scalar|Param|null>,
- *         manage_roles?: null|list<scalar|Param|null>,
+ *         manage_roles?: list<scalar|Param|null>,
  *         access_checker?: scalar|Param|null, // Service id implementing RbacAdminAccessCheckerInterface; null = role-based default. // Default: null
  *         allow_unauthenticated?: bool|Param, // DEV / DEMO only (refused without kernel.debug): open the admin UI without login. // Default: false
  *     },

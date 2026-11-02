@@ -8,8 +8,12 @@ use Nowo\RbacKitBundle\Permission\Permission;
 
 /**
  * Deny-first gate asked before anything else, bypass roles included (e.g. "the paying account's plan leaves this
- * module out"). Services implementing it are autoconfigured with `nowo_rbac_kit.permission_gate`. The decision is
- * memoised per request for (user, permission, context id): it must depend on nothing else.
+ * module out"). Services implementing it are autoconfigured with `nowo_rbac_kit.permission_gate`.
+ *
+ * Memoisation: the decision is memoised per request for (user, roles, permission, typed context id of the subject,
+ * bypass veto state) — for a global key asked with a context subject too — so a gate must depend on nothing else
+ * (no mutable request state). A subject that is not a context is never memoised. Call
+ * {@see PermissionVoter::reset()} if the state a gate reads changes during a request.
  */
 interface PermissionGateInterface
 {

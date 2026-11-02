@@ -43,6 +43,16 @@ final class PermissionTest extends TestCase
         self::assertFalse($permission->equals(new Permission('a.b', PermissionScope::Context, ['other'])));
         self::assertFalse($permission->equals(new Permission('a.b', PermissionScope::Context, ['r'], 'g')));
         self::assertFalse($permission->equals(new Permission('a.c', PermissionScope::Context, ['r'])));
+        self::assertFalse((new Permission('a.b'))->equals(new Permission('a.b', aggregate: true)));
+        self::assertTrue((new Permission('a.b', aggregate: true))->aggregate);
+    }
+
+    #[Test]
+    public function onlyGlobalPermissionsAggregate(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('only global permissions can aggregate');
+        new Permission('a.b', PermissionScope::Context, aggregate: true);
     }
 
     /**

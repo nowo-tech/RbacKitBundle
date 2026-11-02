@@ -43,16 +43,20 @@ This bundle is **FrankenPHP worker mode friendly**: every memo (catalogue, sets,
 - **Permission catalogue** from the bundle configuration and tagged `PermissionProviderInterface` services: key, scope
   (`global` / `context`), guarded routes, group, labels; area aliases; validated (no redefinition, no route guarded
   twice, bounded size).
-- **Permission sets (roles)** from the configuration (system sets, `all` / `except`, `locked`) and, with
+- **Permission sets (roles)** from the configuration (system sets, `all` (context keys) / `except` /
+  `include_global`, `locked`) and, with
   `storage.type: doctrine`, editable and custom sets stored in one table; unknown keys grant nothing.
-- **Context abstraction**: any object implementing `RbacContextInterface` (or your `ContextResolverInterface`) is a
-  context; your `GrantProviderInterface` lists the sets each user holds (one call per user and request).
+- **Typed contexts**: any object implementing `RbacContextInterface` (or your `ContextResolverInterface`) is a context
+  identified by `<type>:<id>` (`project:5` ≠ `organization:5`); your `GrantProviderInterface` lists the sets each user
+  holds (one call per user and request). A set held in a context never grants a platform-wide key unless the key opts
+  in (`aggregate: true`).
 - **Memoised voter** `permission:<key>` / `permission_route:<route>`: deny-first gates, optional bypass roles with
-  vetoes ("view as member"), `role_grants`, global aggregation over the user's contexts, an optional fallback set for
+  vetoes ("view as member"), `role_grants`, per-key aggregation over the user's contexts, an optional fallback set for
   users without any assignment; worker-safe (`ResetInterface`), bounded memos.
 - **Checks everywhere**: `PermissionChecker` (`can`, `canRoute`, `canArea`, `filter`), Twig `rbac_can()`,
   `rbac_can_route()`, `rbac_can_area()`, and an optional **DashboardMenu** permission checker.
-- **Request guard** (opt-in): 403 before the controller on a catalogued route without its permission.
+- **Request guard** (opt-in): 403 (or the login entry point for guests) before the controller on a catalogued route
+  without its permission; strangers to the context are refused by default.
 - **Coverage**: `nowo:rbac:check` and `PermissionCoverage` fail when a route under your prefixes has no permission, a
   catalogue route does not exist or a set names an uncatalogued key.
 - **Admin UI** (opt-in): permission sets and catalogue on the UiKit page contract, FormKit forms, CSRF bound to action
@@ -75,18 +79,19 @@ empty catalogue denies everything) and `config/routes/nowo_rbac_kit.yaml` (the o
 nowo_rbac_kit:
     catalogue:
         permissions:
-            reports.view: { scope: global, routes: [app_reports] }
+            reports.view: { scope: global, routes: [app_reports], aggregate: true }   # general page over my projects
             project.view: { scope: context, routes: [app_project_show] }
             project.issues.triage: { scope: context }
     permission_sets:
         viewer: { permissions: [reports.view, project.view] }
         triage: { permissions: [project.view, project.issues.triage] }
-        owner: { all: true, locked: true }
-    grant_provider: App\Security\MembershipGrantProvider   # lists the sets each user holds per project
+        owner: { all: true, locked: true }                 # every *context* key, never a global one
+    grant_provider: App\Security\MembershipGrantProvider   # yields Assignment::in('owner', 'project', $id)
 ```
 
 ```php
-// App\Entity\Project implements Nowo\RbacKitBundle\Context\RbacContextInterface (getRbacContextId())
+// App\Entity\Project implements Nowo\RbacKitBundle\Context\RbacContextInterface
+// (getRbacContextType(): 'project', getRbacContextId(): (string) $this->id)
 $this->denyAccessUnlessGranted('permission:project.issues.triage', $project);
 ```
 

@@ -67,8 +67,8 @@ Two projects (`billing`, `mobile`) and four users (HTTP Basic, **demo only**: th
 | --- | --- | --- |
 | `admin` | `ROLE_ADMIN` (`voter.bypass_roles`) | Every permission; the admin UI under `/admin/rbac` |
 | `alice` | `viewer` in both projects + `triage` in Billing | Union of two incomparable sets in Billing; 403 on Billing settings (request guard) |
-| `bob` | `auditor` globally | Reports and export, no project (controller check for strangers) |
-| `carol` | `owner` (locked, every key) in Mobile | Every Mobile permission; general pages by aggregation |
+| `bob` | `auditor` globally | Reports and export, no project (the request guard refuses strangers) |
+| `carol` | `owner` (locked, every context key) in Mobile | Every Mobile permission; no global key (no reports, no export) |
 
 ## Timeout hierarchy
 
@@ -143,7 +143,8 @@ make demo-screenshots    # refreshes docs/images/demo/*.webp
 
 Both run in the official Playwright image (`mcr.microsoft.com/playwright`, host network, one worker, HTTP Basic
 credentials sent with every request). The specs live in `demo/symfony8/e2e/tests/`: `demo.spec.ts` (alice's matrix is
-the union of her sets, the request guard refuses Billing settings, bob reaches the reports but no project, the admin
+the union of her sets, the request guard refuses Billing settings, bob reaches the reports but no project, carol — owner
+of Mobile only — holds no global key (no reports, no export), the admin
 creates / lists / deletes a custom set through the UiKit confirm dialog, edits a system set) and `screenshots.spec.ts`
 (three WebP captures with the demo masthead, the page and the web debug toolbar; PNGs are converted with `sharp` and
 deleted).

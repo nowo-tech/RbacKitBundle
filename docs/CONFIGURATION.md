@@ -37,6 +37,7 @@ nowo_rbac_kit:
                 group: general            # admin catalogue column (optional)
                 label: ~                  # translation key (default permission.<key>.label)
                 description: ~            # translation key (default permission.<key>.description)
+                aggregate: false          # global keys only: also granted when one of the user's contexts grants it
         aliases: {}                       # area alias => key (canArea(), rbac_can_area())
         open_routes: []                   # routes permission_route: always grants and coverage ignores
         unmapped_routes: deny             # deny | allow: permission_route: on a route no key guards
@@ -45,13 +46,13 @@ nowo_rbac_kit:
             label: ~                      # translation key (default permission_set.<code>.label)
             description: ~
             permissions: [reports.view]
-            all: false                    # true = every catalogued key (minus except)
+            all: false                    # true = every catalogued *context* key (minus except)
+            include_global: false         # with all: true, also every global key (sets assigned globally only)
             except: []
             locked: false                 # true = not editable from the admin UI; stored edits ignored
     role_grants: {}                       # ROLE_* => global keys the role holds (after the role hierarchy)
     voter:
         bypass_roles: []                  # ROLE_* that pass every permission (default: nobody)
-        global_aggregation: true          # a global key passes when one of the user's contexts grants it
         fallback_permission_set: ~        # set whose global keys a user without any assignment holds
         max_assignments: 5000             # assignments read per user and request (1..100000)
     grant_provider: ~                     # service id (GrantProviderInterface); null = nobody holds a set
@@ -60,14 +61,15 @@ nowo_rbac_kit:
         type: config                      # config (read-only) | doctrine | service
         service: ~                        # PermissionSetStorageInterface service id (type: service)
         cache_pool: cache.app             # pool of the stored rows (null = read the storage once per request)
-        max_sets: 200                     # stored rows read / creatable (1..5000)
-        usage_provider: ~                 # PermissionSetUsageInterface service id (assignment counts)
+        cache_ttl: 300                    # seconds the cached rows live (1..86400)
+        max_sets: 200                     # stored rows (1..5000); more rows in the storage is an error
+        usage_provider: ~                 # PermissionSetUsageInterface service id; needed to delete custom sets
     doctrine:
         table_prefix: ''                  # letters, digits, underscores (REQ-ORM-002)
     request_guard:
         enabled: false                    # 403 before the controller on a catalogued route without its key
         context_resolver: ~               # RequestContextResolverInterface service id (the context of a request)
-        skip_strangers: true              # users holding no set in the request's context: left to the controller
+        skip_strangers: false             # true = strangers / unresolved contexts left to the controller
     coverage:
         prefixes: []                      # default path prefixes of nowo:rbac:check
         ignore_routes: []
@@ -78,7 +80,7 @@ nowo_rbac_kit:
         templates: {}                     # index | catalogue | form => template
     security:
         access_roles: [ROLE_ADMIN]        # read-only pages (any of them); never empty without access_checker
-        manage_roles: ~                   # create / edit / delete (null = access_roles); never empty
+        manage_roles: [ROLE_ADMIN]        # create / edit / delete (independent of access_roles); never empty
         access_checker: ~                 # RbacAdminAccessCheckerInterface service id
         allow_unauthenticated: false      # DEV / DEMO only: refused without kernel.debug
 ```
@@ -95,6 +97,10 @@ never grants.
 - `scope: global` — asked without a subject (dashboards, reports, chat, global actions).
 - `scope: context` — asked with the context subject (`isGranted('permission:project.view', $project)`); asked without
   one, it is refused.
+- `aggregate: true` (global keys only) — the key is also granted when a set the user holds in **any** context contains
+  it: a general page (reports, summary) that shows the data of those contexts only (`PermissionChecker::filter()`).
+  Default `false`: a set held in a context never grants a global key. Never flag platform keys (user administration,
+  billing, exports): every member of any context would hold them.
 
 `open_routes` are the always-open pages (home, account, logout): `permission_route:` grants them and the coverage
 check ignores them. `unmapped_routes: deny` (default) hides menu links to routes the catalogue does not know; set
@@ -104,7 +110,9 @@ check ignores them. `unmapped_routes: deny` (default) hides menu links to routes
 
 A permission set is a "role": a named collection of keys. System sets come from the configuration; with a writable
 storage the admin UI can edit them (the first edit stores a row that replaces the configured keys) and create custom
-sets. `locked` sets are never edited (an owner set, for example `all: true, locked: true`). Keys that are not
+sets. `locked` sets are never edited (an owner set, for example `all: true, locked: true`). `all: true` holds every
+catalogued **context** key (minus `except`), so an owner set held in a project never carries platform-wide keys;
+`include_global: true` adds the global keys for a set meant to be assigned globally. Keys that are not
 catalogued are dropped when the sets are read (they grant nothing; a warning is logged once per request) and reported
 by `nowo:rbac:check`.
 
@@ -119,16 +127,20 @@ never granted by a role: only sets held in the context grant them.
 | Option | Default | Effect |
 | --- | --- | --- |
 | `bypass_roles` | `[]` | Superuser roles that pass every catalogued key (unknown keys and gates still deny). A `BypassVetoInterface` service can suspend it for one decision ("view as member"). |
-| `global_aggregation` | `true` | A global key passes when at least one of the user's contexts grants it (general pages that show the data of those contexts only — use `PermissionChecker::filter()`). |
 | `fallback_permission_set` | `null` | The global keys of this set are held by users without any assignment (a brand-new account keeps the general pages). Must name a configured set. |
 | `max_assignments` | `5000` | Assignments read per user and request; the rest are ignored and logged (bounded memo). |
 
 ## Grant provider and contexts
 
-`grant_provider` names your `GrantProviderInterface` service: it returns the `Assignment`s (set code + context id, or
-null for a global assignment) a user holds — direct memberships, group links. It is called once per user and request.
-`context_resolver` maps a voter subject to its context id; the default accepts objects implementing
-`RbacContextInterface` (non-empty id, at most 191 characters) and refuses everything else.
+`grant_provider` names your `GrantProviderInterface` service: it returns the `Assignment`s a user holds — direct
+memberships, group links — built with `Assignment::in('owner', 'project', $id)`, `Assignment::of('owner', $project)`
+or `Assignment::global('auditor')`. It is called once per user and request.
+
+Context ids are **typed**: `<type>:<id>` (`project:5`, `organization:5`), so two context classes sharing an id are two
+contexts. `context_resolver` maps a voter subject to its typed id; the default accepts objects implementing
+`RbacContextInterface` (type `^[a-z][a-z0-9_]{0,39}$`, a stable alias — never a class name; non-empty id of at most 191
+characters) and refuses everything else. A custom resolver must return `ContextId::of($type, $id)`; an untyped id is
+refused by the voter, and `Assignment` throws on one.
 
 ## Storage
 
@@ -138,17 +150,27 @@ null for a global assignment) a user holds — direct memberships, group links. 
 | `doctrine` | Entity `PermissionSetRecord`, table `rbac_permission_set` (+ `doctrine.table_prefix`, unique code). Needs `doctrine/orm` and `doctrine/doctrine-bundle`; the mapping is prepended. Create the table with a migration. |
 | `service` | Your `PermissionSetStorageInterface` service (`storage.service`). |
 
-The stored rows are read once per request (`max_sets` at most) and cached in `cache_pool` (whole table, invalidated
-after every change); use a pool shared by every web worker. `usage_provider` (optional) returns the assignment count of
-each set: the admin list shows it and a set in use cannot be deleted.
+The stored rows are read once per request and cached in `cache_pool` (whole table, invalidated after every change on
+the host that made it, expiring after `cache_ttl` seconds); use a pool shared by every web host so a change is seen at
+once, otherwise within `cache_ttl`. A storage holding more than `max_sets` rows is an error (`OverflowException`,
+logged `critical`): rows are never dropped silently. `usage_provider` returns the assignment count of each set: the
+admin list shows it, a set in use cannot be deleted and a code that is still assigned cannot be created. Without a
+usage provider custom sets cannot be deleted (a deleted code's old assignments would otherwise inherit a re-created
+set).
 
 ## Request guard
 
 `request_guard.enabled: true` registers a `kernel.controller` listener: a main request to a catalogued route is refused
-with the firewall's 403 when the user lacks the route's key. Guests are left to the firewall. For a context key the
-`request_guard.context_resolver` service (your `RequestContextResolverInterface`) returns the request's context; without
-one, or for users holding no set in that context (`skip_strangers`), the controller keeps its own answer (404 existence
-mask, share links…). Requires SecurityBundle.
+with the firewall's 403 when the user lacks the route's key, and a guest gets the firewall's entry point (login / 401).
+For a context key the `request_guard.context_resolver` service (your `RequestContextResolverInterface`) returns the
+request's context; users holding no set in it — and requests whose context is not resolved — are refused too.
+
+- `skip_strangers: true` leaves strangers and unresolved contexts to the controller (its 404 existence mask);
+  members without the key are still refused.
+- The route default `_rbac_guard: false` leaves one route to its controller (share links, public pages):
+  `#[Route('/share/{token}', defaults: ['_rbac_guard' => false])]`. That controller must check access itself.
+
+Requires SecurityBundle.
 
 ## Coverage
 
@@ -188,11 +210,11 @@ nowo_form_kit:
 ## Security
 
 REQ-UI-002: `security.access_roles` (default `[ROLE_ADMIN]`) opens the read-only pages, `security.manage_roles` (default
-the access roles) the mutations; an empty role list is refused at compile time; `security.access_checker` replaces the
+`[ROLE_ADMIN]`, independent of the access roles) the mutations — the manage area is root-equivalent over the catalogue,
+so keep it for platform administrators; an empty role list is refused at compile time; `security.access_checker` replaces the
 role check with your `RbacAdminAccessCheckerInterface`. Protect `web_ui.path_prefix` with `access_control` too.
 `allow_unauthenticated: true` is for demos only (refused unless `kernel.debug`). `web_ui.enabled`,
-`allow_unauthenticated`, `request_guard.enabled`, `request_guard.skip_strangers` and `voter.global_aggregation` must
-be literal booleans (an `%env(bool:…)%` placeholder is refused: it would read as true while the container is built).
+`allow_unauthenticated`, `request_guard.enabled` and `request_guard.skip_strangers` must be literal booleans (an `%env(bool:…)%` placeholder is refused: it would read as true while the container is built).
 
 ## Profiles
 

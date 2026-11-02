@@ -15,12 +15,12 @@ use Nowo\RbacKitBundle\PermissionSet\PermissionSetStorageInterface;
 final class Catalogues
 {
     /**
-     * @return array<string, array{scope: string, routes: list<string>, group: string|null, label: string|null, description: string|null}>
+     * @return array<string, array{scope: string, routes: list<string>, group: string|null, label: string|null, description: string|null, aggregate: bool}>
      */
     public static function permissions(): array
     {
         return [
-            'summary.view'          => self::permission('global', ['dashboard_summary'], 'general'),
+            'summary.view'          => self::permission('global', ['dashboard_summary'], 'general', true),
             'reports.export'        => self::permission('global', [], 'general'),
             'wiki.manage'           => self::permission('global'),
             'project.view'          => self::permission('context', ['project_show'], 'project'),
@@ -30,7 +30,7 @@ final class Catalogues
     }
 
     /**
-     * @return array<string, array{label: string|null, description: string|null, permissions: list<string>, all: bool, except: list<string>, locked: bool}>
+     * @return array<string, array{label: string|null, description: string|null, permissions: list<string>, all: bool, include_global: bool, except: list<string>, locked: bool}>
      */
     public static function sets(): array
     {
@@ -55,21 +55,21 @@ final class Catalogues
     /**
      * @param list<string> $routes
      *
-     * @return array{scope: string, routes: list<string>, group: string|null, label: string|null, description: string|null}
+     * @return array{scope: string, routes: list<string>, group: string|null, label: string|null, description: string|null, aggregate: bool}
      */
-    private static function permission(string $scope, array $routes = [], ?string $group = null): array
+    private static function permission(string $scope, array $routes = [], ?string $group = null, bool $aggregate = false): array
     {
-        return ['scope' => $scope, 'routes' => $routes, 'group' => $group, 'label' => null, 'description' => null];
+        return ['scope' => $scope, 'routes' => $routes, 'group' => $group, 'label' => null, 'description' => null, 'aggregate' => $aggregate];
     }
 
     /**
      * @param list<string> $permissions
      * @param list<string> $except
      *
-     * @return array{label: string|null, description: string|null, permissions: list<string>, all: bool, except: list<string>, locked: bool}
+     * @return array{label: string|null, description: string|null, permissions: list<string>, all: bool, include_global: bool, except: list<string>, locked: bool}
      */
-    private static function set(array $permissions = [], bool $all = false, array $except = [], bool $locked = false): array
+    public static function set(array $permissions = [], bool $all = false, array $except = [], bool $locked = false, bool $includeGlobal = false): array
     {
-        return ['label' => null, 'description' => null, 'permissions' => $permissions, 'all' => $all, 'except' => $except, 'locked' => $locked];
+        return ['label' => null, 'description' => null, 'permissions' => $permissions, 'all' => $all, 'include_global' => $includeGlobal, 'except' => $except, 'locked' => $locked];
     }
 }

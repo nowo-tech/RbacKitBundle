@@ -33,6 +33,12 @@ final class PermissionSetException extends DomainException
     /** The set is still assigned ({@see PermissionSetUsageInterface}). */
     public const IN_USE = 'in_use';
 
+    /** The code is still held by assignments (a deleted set's code): re-creating it would give them its keys. */
+    public const CODE_ASSIGNED = 'code_assigned';
+
+    /** No usage provider: whether the set is still assigned is unknown, so it cannot be deleted. */
+    public const USAGE_UNKNOWN = 'usage_unknown';
+
     /** No set with this code. */
     public const NOT_FOUND = 'not_found';
 

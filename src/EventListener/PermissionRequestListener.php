@@ -24,16 +24,20 @@ use function sprintf;
 
 /**
  * Opt-in request guard (`request_guard.enabled`): a main request to a route the catalogue guards is refused before
- * its controller runs (the firewall's 403 — branded page or JSON) when the user lacks the route's permission (with
- * the request's context for a context key).
+ * its controller runs (the firewall's 403 — branded page or JSON — or, for a guest, the firewall's entry point) when
+ * the user lacks the route's permission (with the request's context for a context key). Fail closed by default:
+ * guests, users holding no set in the context and context routes whose context cannot be resolved are refused.
  *
- * Guests are left to the firewall; a context route whose context the {@see RequestContextResolverInterface} cannot
- * resolve is left to the controller; with `request_guard.skip_strangers` (default) users holding no set in the
- * context are left to the controller too, which keeps its own answer (404 existence mask, share links…). Registered
- * with an explicit `kernel.event_listener` tag (the attribute documents the event). Stateless.
+ * Opt-outs: the route default `_rbac_guard: false` leaves one route to its controller (share links, public pages);
+ * `request_guard.skip_strangers: true` leaves users holding no set in the context — and unresolved contexts — to the
+ * controller, which keeps its own answer (404 existence mask). Registered with an explicit `kernel.event_listener` tag
+ * (the attribute documents the event). Stateless.
  */
 final readonly class PermissionRequestListener
 {
+    /** Route default that leaves a catalogued route to its controller (`_rbac_guard: false`). */
+    public const ROUTE_OPT_OUT = '_rbac_guard';
+
     /**
      * @param bool $skipStrangers `request_guard.skip_strangers`
      */
@@ -44,7 +48,7 @@ final readonly class PermissionRequestListener
         private RequestContextResolverInterface $requestContexts,
         private ContextResolverInterface $contexts,
         private GrantResolver $grants,
-        private bool $skipStrangers = true,
+        private bool $skipStrangers = false,
     ) {
     }
 
@@ -59,20 +63,23 @@ final readonly class PermissionRequestListener
         }
         $request = $event->getRequest();
         $route   = $request->attributes->get('_route');
-        $user    = $this->tokens->getToken()?->getUser();
-        if (!is_string($route) || !$user instanceof UserInterface) {
+        if (!is_string($route) || $request->attributes->get(self::ROUTE_OPT_OUT) === false) {
             return;
         }
         $permission = $this->catalog->forRoute($route);
         if (!$permission instanceof Permission) {
             return;
         }
+        $user = $this->tokens->getToken()?->getUser();
+        if (!$user instanceof UserInterface) {
+            throw new AccessDeniedException(sprintf('Permission "%s": authentication required.', $permission->key));
+        }
 
         $context = null;
         if ($permission->scope === PermissionScope::Context) {
             $context   = $this->requestContexts->fromRequest($request);
             $contextId = $context === null ? null : $this->contexts->contextId($context);
-            if ($contextId === null || ($this->skipStrangers && !$this->grants->holdsSetIn($user, $contextId))) {
+            if ($this->skipStrangers && ($contextId === null || !$this->grants->holdsSetIn($user, $contextId))) {
                 return;
             }
         }

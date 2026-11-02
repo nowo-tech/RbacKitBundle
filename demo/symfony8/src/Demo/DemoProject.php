@@ -11,10 +11,18 @@ use Nowo\RbacKitBundle\Context\RbacContextInterface;
  */
 final readonly class DemoProject implements RbacContextInterface
 {
+    /** Context type of the demo projects (typed context ids: `project:<slug>`). */
+    public const TYPE = 'project';
+
     public function __construct(
         public string $slug,
         public string $name,
     ) {
+    }
+
+    public function getRbacContextType(): string
+    {
+        return self::TYPE;
     }
 
     public function getRbacContextId(): string

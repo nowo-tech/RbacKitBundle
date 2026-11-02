@@ -38,7 +38,10 @@ final class AccessTest extends TestCase
         self::assertFalse($checker->canAccess($user, RbacAdminAccessCheckerInterface::AREA_MANAGE));
         self::assertFalse($checker->canAccess(null));
         self::assertFalse((new ConfigurableRbacAdminAccessChecker(null, ['ROLE_ADMIN']))->canAccess($user));
-        self::assertTrue((new ConfigurableRbacAdminAccessChecker($this->granted(['ROLE_ADMIN']), ['ROLE_ADMIN']))->canAccess($user, RbacAdminAccessCheckerInterface::AREA_MANAGE), 'manage inherits the access roles');
+        self::assertTrue((new ConfigurableRbacAdminAccessChecker($this->granted(['ROLE_ADMIN']), ['ROLE_ADMIN']))->canAccess($user, RbacAdminAccessCheckerInterface::AREA_MANAGE), 'manage defaults to ROLE_ADMIN');
+        $viewer = new ConfigurableRbacAdminAccessChecker($this->granted(['ROLE_RBAC_VIEWER']), ['ROLE_ADMIN', 'ROLE_RBAC_VIEWER']);
+        self::assertTrue($viewer->canAccess($user));
+        self::assertFalse($viewer->canAccess($user, RbacAdminAccessCheckerInterface::AREA_MANAGE), 'L6: access roles do not manage');
         self::assertFalse((new ConfigurableRbacAdminAccessChecker($this->granted(['ROLE_ADMIN']), []))->canAccess($user), 'an empty list denies');
         self::assertTrue((new AllowAllRbacAdminAccessChecker())->canAccess(null, 'manage'));
     }

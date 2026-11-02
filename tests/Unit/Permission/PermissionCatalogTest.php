@@ -23,7 +23,7 @@ final class PermissionCatalogTest extends TestCase
     {
         $catalog = new PermissionCatalog([
             $this->provider(...array_values(Catalogues::catalog()->all())),
-            $this->provider(new Permission('zz.extra'), new Permission('summary.view', PermissionScope::Global, ['dashboard_summary'], 'general')),
+            $this->provider(new Permission('zz.extra'), new Permission('summary.view', PermissionScope::Global, ['dashboard_summary'], 'general', aggregate: true)),
         ], ['product.summary' => 'summary.view']);
 
         self::assertSame(['reports.export', 'summary.view', 'wiki.manage', 'zz.extra', 'project.issues.triage', 'project.settings.view', 'project.view'], array_keys($catalog->all()));

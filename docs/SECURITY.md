@@ -43,13 +43,18 @@ code), the host firewall and `access_control`.
 | Threat | Mitigation |
 | --- | --- |
 | Privilege escalation through a misconfigured catalogue | Fail closed (P1): an empty catalogue denies every attribute (bypass roles included); unknown keys, unmapped routes (`unmapped_routes: deny` default), guests and context keys without a resolvable context are denied; a redefined key, a route guarded twice, an alias to an unknown key or an oversized catalogue throw instead of granting. Defaults grant nothing: no bypass role, no fallback set, no grant provider. |
-| Context confusion (permission of project A used in project B) | Context keys are granted only by sets held **in that context** (context id from `RbacContextInterface` / the resolver); objects that are not contexts are refused; global assignments and role grants never grant context keys. |
-| Stale or cross-user grants in worker mode | Memos keyed by user class + identifier (+ reachable roles for decisions), cleared by `kernel.reset` every request, bounded (see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md)). |
+| Context confusion (permission of project A used in project B) | Context keys are granted only by sets held **in that context**; objects that are not contexts are refused; global assignments and role grants never grant context keys. |
+| Context type confusion (`Organization#5` vs `Project#5`) | Context ids are **typed** (`<type>:<id>`, `ContextId`): the default resolver builds `getRbacContextType():getRbacContextId()`, `Assignment` refuses an untyped context id when it is built, and the voter refuses an untyped id returned by a custom resolver. Two context classes sharing an id are two contexts (Appendix CI M1). |
+| Context → global promotion (a tenant-level owner gaining platform keys) | A set held in a context never grants a **global** key, except keys the catalogue flags `aggregate: true` (general pages that show the data of the granting contexts). `all: true` expands to **context** keys only (`include_global: true` is an explicit opt-in for sets assigned globally). The former `voter.global_aggregation` switch, which promoted every global key of any context-held set, is removed (Appendix CI H1). |
+| Request guard bypass by guests and strangers | With `request_guard.enabled`, guests on a catalogued route get the firewall entry point, and users holding no set in the request's context — or requests whose context cannot be resolved — get 403 (`skip_strangers: false` default). Per-route opt-out: route default `_rbac_guard: false` (Appendix CI L1). |
+| Stale or cross-user grants in worker mode | Memos keyed by user class + identifier (+ reachable roles, the subject's typed context id and the bypass veto state for decisions; subjects that are not contexts are not memoised), cleared by `kernel.reset` every request, bounded (see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md)). |
+| Revocation not seen by other web hosts | The cache entry of the stored sets expires after `storage.cache_ttl` (default 300 s), so a per-host pool sees an edit or a deletion within the TTL; a shared pool sees it at once (Appendix CI L3). |
+| Silent loss of stored rows | A storage holding more than `storage.max_sets` rows is an error (logged `critical`, `OverflowException`), never a silent drop that could restore a narrowed system set to its broader configuration (Appendix CI L4). |
 | Tampered stored sets / cache | Stored keys are intersected with the catalogue on every read (uncatalogued keys grant nothing); malformed cache rows are dropped. |
-| Unauthenticated / unauthorised admin access | Default `access_roles: [ROLE_ADMIN]`; a kernel request listener (priority 7, after the firewall) denies every request under the prefix and every bundle controller; mutations also need `manage_roles`; empty role lists are refused at compile time; the host adds `access_control` (two layers, REQ-UI-002). Tokens are trusted only when a firewall matched the current main request. |
+| Unauthenticated / unauthorised admin access | Default `access_roles: [ROLE_ADMIN]`; a kernel request listener (priority 7, after the firewall) denies every request under the prefix and every bundle controller; mutations need `manage_roles` (default `[ROLE_ADMIN]`, **independent** of `access_roles`, so a read-only auditor role added to `access_roles` cannot edit — Appendix CI L6); empty role lists are refused at compile time; the host adds `access_control` (two layers, REQ-UI-002). Tokens are trusted only when a firewall matched the current main request. |
 | Admin routes exposed by `routing.controllers` | The controller is not autoconfigured; routes exist only through the `nowo_rbac_kit` loader (REQ-SF-004 rule 7, kernel test). |
 | CSRF on mutations | Every POST is a Symfony Form with CSRF: `PermissionSetType` (token id `nowo_rbac/create/new` or `nowo_rbac/edit/<code>`) and FormKit CSRF-only delete forms (`nowo_rbac/delete/<code>`); `/` cannot appear in a code, so a token of one action or set is refused by every other; invalid tokens answer 422 (forms) or 403 (delete) without writing; `CsrfProtectionPass` refuses to compile the UI without form CSRF (P2). |
-| Destructive actions | System sets cannot be deleted; locked sets cannot be changed; a set in use (usage provider) cannot be deleted; a deleted custom set grants nothing any more (fail closed). |
+| Destructive actions and resurrected codes | System sets cannot be deleted; locked sets cannot be changed. Deleting a custom set needs the usage provider (`storage.usage_provider`) and is refused while the set is assigned; a code that the usage provider still reports as assigned cannot be created, so stale host assignments never inherit a re-created set (Appendix CI L2). |
 | Open redirects | Redirects are generated route paths only (`redirectToRoute`); no URL is read from the request. |
 | XSS | Every value is printed with Twig auto-escaping (no `|raw`); labels through `nowo_ui_trans`; contract test asserts no inline handlers or `confirm(`. |
 | SQL injection | Doctrine repository methods with bound parameters only. |
@@ -108,27 +113,49 @@ are released as patch versions.
 | Cryptography | — (none) |
 | Permissions / exposure | ✅ (two layers, manage area, opt-in routes) |
 | Limits / DoS | ✅ |
-| AI security audit passed (REQ-SEC-004) | ⏳ Pending — independent audit requested before the 1.0.0 tag |
+| AI security audit passed (REQ-SEC-004) | ⏳ First pass (Appendix CI, `8bd695a`): Fail / High; H1, M1 and L1–L6 fixed in code — re-verification pending before the 1.0.0 tag |
 
 ## AI security audit (REQ-SEC-004)
 
-The bundle is not self-graded. The independent AI audit will be recorded in the monorepo `BUNDLES_SECURITY_ANALYSIS.md`
-and summarised here before the 1.0.0 tag.
+The bundle is not self-graded. The independent AI audit is recorded in the monorepo `BUNDLES_SECURITY_ANALYSIS.md`
+(Appendix CI) and summarised here.
 
 | Pass | Date | Revision | Grade | Findings | Fixed in |
 | --- | --- | --- | --- | --- | --- |
-| First pass | — | — | Pending | — | — |
+| First pass (Appendix CI) | 2026-11-01 | `8bd695a` | Fail (High open) / High | H1 global aggregation promoted the global keys of any context-held set (owner `all: true` included); M1 untyped context ids; L1 guard let guests / strangers through; L2 re-created codes inherited stale assignments; L3 cache entry never expired; L4 rows beyond `max_sets` dropped silently; L5 memo ignored the subject of global keys and the veto state; L6 `manage_roles` defaulted to `access_roles`; I1–I7 informational | Unreleased (this branch): every High / Medium / Low fixed in code (see the threat table); informational notes below |
+| Re-verification | — | — | Pending | — | — |
 
 ## Residual risks and host guidance
 
-- The voter is only as good as the grant provider: return active memberships only, and keep the context id stable
-  (the same value in `Assignment::$contextId` and `getRbacContextId()`).
-- Gates and bypass vetoes are memoised per request for (user, key, context): do not make them depend on anything else.
-- With `global_aggregation: true` a general page is open when one context grants its key: filter its data with
-  `PermissionChecker::filter()` so it shows only the granting contexts.
+- The voter is only as good as the grant provider: return active memberships only, and build their context ids with
+  `Assignment::in()` / `Assignment::of()` so they match the resolver (`<type>:<id>`; types are stable aliases, never
+  class names).
+- Gates are memoised per request for (user, roles, key, the subject's typed context id, veto state): do not make them
+  depend on mutable request state, or call `PermissionVoter::reset()` when it changes. Vetoes are asked on every
+  decision of a bypass role and must be cheap.
+- A key flagged `aggregate: true` opens a general page when one context grants it: filter its data with
+  `PermissionChecker::filter()` so it shows only the granting contexts, and never flag a platform-level key
+  (user administration, billing, exports) as aggregatable.
 - `unmapped_routes: allow` and `catalogue.open_routes` open routes to everybody on `permission_route:` (menus): use
-  them only for public pages.
-- With several web hosts, use a shared `storage.cache_pool`, or an edit is seen per host when its cache entry expires.
+  them only for public pages (Appendix CI I5, accepted).
+- With several web hosts, use a shared `storage.cache_pool` (a change is then seen at once); with a per-host pool a
+  change is seen within `storage.cache_ttl` seconds.
+- The manage area (`manage_roles`) is **root-equivalent over the catalogue**: a manager can add any catalogued key to
+  any unlocked set, including the set they hold and `voter.fallback_permission_set`. There is no "grant only what you
+  hold" rule (residual, by design for a super-admin screen): give `manage_roles` to platform administrators only, and
+  mark the fallback set and every set carrying platform keys `locked: true` (Appendix CI L6).
+- The request guard's `_rbac_guard: false` opt-out and `skip_strangers: true` leave those requests to the controller,
+  which must then run its own `denyAccessUnlessGranted()`.
+- **Cache trust (I1, residual)**: whoever can write the cache pool can grant any catalogued key (uncatalogued keys and
+  malformed rows are still dropped). The cache key `nowo_rbac_kit.permission_sets.v1` is constant: give the bundle a
+  dedicated pool or namespace when several applications share one Redis / Memcached.
+- **Same-request memos after a change (I2, residual)**: a create / edit / delete clears the set registry, not the grant
+  and decision memos of the request that made it; the next request (`kernel.reset`) sees the change.
+- **User memo key (I3, residual)**: users are memoised by class + identifier; CLI / batch hosts that load two
+  different users with the same class and identifier in one run must call `GrantResolver::reset()` between them.
+- **Controller instances (I4, residual)**: the admin access listener recognises string and `[class, method]`
+  controllers; a host route built by hand on a controller *instance* outside the prefix would skip the view check
+  (mutations are re-checked by the controller). The bundle loader never builds such a route.
 
 ## Reporting a vulnerability
 

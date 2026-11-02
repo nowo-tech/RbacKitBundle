@@ -138,6 +138,35 @@ final class PermissionSetManagerTest extends TestCase
         self::assertSame([], $this->events->events, 'nothing is audited');
     }
 
+    /**
+     * Appendix CI L2: a code still held by assignments cannot be re-created, and without a usage provider nothing can
+     * be deleted (the old holders of a deleted code would inherit a re-created set).
+     */
+    #[Test]
+    public function deletedCodesAreNeverResurrected(): void
+    {
+        $manager = new PermissionSetManager(Catalogues::registry($this->storage), Catalogues::catalog(), $this->storage, 200, $this->events, new StaticUsage(['helpdesk' => 2]));
+        self::assertTrue($manager->canDelete());
+        try {
+            $manager->create('helpdesk', 'Helpdesk', null, ['wiki.manage']);
+            self::fail('stale assignments');
+        } catch (PermissionSetException $e) {
+            self::assertSame(PermissionSetException::CODE_ASSIGNED, $e->reason);
+        }
+
+        $this->storage->save(new StoredPermissionSet('temp', 'Temp', null, false, ['summary.view']));
+        $blind = new PermissionSetManager(Catalogues::registry($this->storage), Catalogues::catalog(), $this->storage);
+        self::assertFalse($blind->canDelete());
+        try {
+            $blind->delete('temp');
+            self::fail('no usage provider');
+        } catch (PermissionSetException $e) {
+            self::assertSame(PermissionSetException::USAGE_UNKNOWN, $e->reason);
+        }
+        self::assertArrayHasKey('temp', $this->storage->rows);
+        self::assertSame('other', $blind->create('other', 'Other', null, [])->code, 'creation without a usage provider still works');
+    }
+
     #[Test]
     public function theStoredSetsAreBounded(): void
     {

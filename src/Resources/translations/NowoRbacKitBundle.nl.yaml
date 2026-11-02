@@ -70,6 +70,8 @@ error:
     locked: 'Deze rechtenset is vergrendeld in de configuratie.'
     system: 'Systeemrechtensets kunnen niet worden verwijderd.'
     in_use: 'Deze rechtenset is nog toegewezen en kan niet worden verwijderd.'
+    code_assigned: 'Deze code is nog aan toewijzingen gekoppeld (een verwijderde set?): verwijder ze voordat u een set met deze code aanmaakt.'
+    usage_unknown: 'Eigen sets kunnen alleen worden verwijderd met een gebruiksprovider (storage.usage_provider) die bevestigt dat ze niet meer zijn toegewezen.'
     not_found: 'Onbekende rechtenset.'
     limit: 'Het maximale aantal opgeslagen rechtensets is bereikt.'
     read_only: 'Rechtensets zijn alleen-lezen (storage.type: config).'

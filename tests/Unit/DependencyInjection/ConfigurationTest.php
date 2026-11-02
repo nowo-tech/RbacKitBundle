@@ -28,17 +28,21 @@ final class ConfigurationTest extends TestCase
         self::assertSame('/admin/rbac', $config['web_ui']['path_prefix']);
         self::assertFalse($config['request_guard']['enabled']);
         self::assertSame(['ROLE_ADMIN'], $config['security']['access_roles']);
+        self::assertSame(['ROLE_ADMIN'], $config['security']['manage_roles'], 'L6: managing is not implied by access_roles');
         self::assertFalse($config['security']['allow_unauthenticated']);
+        self::assertFalse($config['request_guard']['skip_strangers'], 'L1: strangers are refused');
+        self::assertSame(300, $config['storage']['cache_ttl'], 'L3: the cache entry expires');
+        self::assertArrayNotHasKey('global_aggregation', $config['voter'], 'H1: aggregation is per key');
     }
 
     #[Test]
     public function aFullConfigurationIsAccepted(): void
     {
         $config = $this->process([
-            'catalogue'       => ['permissions' => ['project.view' => ['scope' => 'context', 'routes' => ['project_show']]], 'aliases' => ['area' => 'project.view'], 'open_routes' => ['home'], 'unmapped_routes' => 'allow'],
-            'permission_sets' => ['viewer' => ['permissions' => ['project.view']], 'owner' => ['all' => true, 'locked' => true]],
+            'catalogue'       => ['permissions' => ['project.view' => ['scope' => 'context', 'routes' => ['project_show']], 'reports.view' => ['aggregate' => true]], 'aliases' => ['area' => 'project.view'], 'open_routes' => ['home'], 'unmapped_routes' => 'allow'],
+            'permission_sets' => ['viewer' => ['permissions' => ['project.view']], 'owner' => ['all' => true, 'locked' => true], 'root' => ['all' => true, 'include_global' => true]],
             'role_grants'     => ['ROLE_MANAGER' => ['wiki.manage']],
-            'voter'           => ['bypass_roles' => ['ROLE_ADMIN'], 'fallback_permission_set' => 'viewer', 'global_aggregation' => false],
+            'voter'           => ['bypass_roles' => ['ROLE_ADMIN'], 'fallback_permission_set' => 'viewer'],
             'storage'         => ['type' => 'service', 'service' => 'app.storage', 'cache_pool' => null],
             'web_ui'          => ['enabled' => true, 'templates' => ['index' => 'admin/rbac.html.twig']],
             'security'        => ['access_roles' => [], 'access_checker' => 'app.checker'],
@@ -46,6 +50,10 @@ final class ConfigurationTest extends TestCase
 
         self::assertSame('context', $config['catalogue']['permissions']['project.view']['scope']);
         self::assertTrue($config['permission_sets']['owner']['all']);
+        self::assertFalse($config['permission_sets']['owner']['include_global']);
+        self::assertTrue($config['permission_sets']['root']['include_global']);
+        self::assertTrue($config['catalogue']['permissions']['reports.view']['aggregate']);
+        self::assertFalse($config['catalogue']['permissions']['project.view']['aggregate']);
         self::assertSame('viewer', $config['voter']['fallback_permission_set']);
         self::assertSame(['ROLE_A', 'ROLE_B'], Configuration::strings(['  ROLE_A ', '', 3, 'ROLE_B']));
         self::assertSame([], Configuration::strings('nope'));
@@ -59,6 +67,10 @@ final class ConfigurationTest extends TestCase
         yield 'invalid permission key' => [['catalogue' => ['permissions' => ['Bad Key' => []]]], 'Invalid nowo_rbac_kit.catalogue.permissions key(s) "Bad Key"'];
         yield 'invalid scope' => [['catalogue' => ['permissions' => ['a.b' => ['scope' => 'tenant']]]], 'scope'];
         yield 'invalid set code' => [['permission_sets' => ['Viewer' => []]], 'codes must match'];
+        yield 'aggregating context key' => [['catalogue' => ['permissions' => ['project.view' => ['scope' => 'context', 'aggregate' => true], 'a.b' => []]]], 'permissions "project.view": aggregate is only allowed on global permissions'];
+        yield 'include_global without all' => [['permission_sets' => ['viewer' => ['include_global' => true]]], 'include_global needs all: true'];
+        yield 'removed global_aggregation' => [['voter' => ['global_aggregation' => true]], 'Unrecognized option "global_aggregation"'];
+        yield 'cache ttl zero' => [['storage' => ['cache_ttl' => 0]], 'cache_ttl'];
         yield 'role grant without ROLE_' => [['role_grants' => ['MANAGER' => ['a.b']]], 'role_grants keys must be ROLE_*'];
         yield 'empty role grant' => [['role_grants' => ['ROLE_MANAGER' => []]], 'role_grants keys must be ROLE_*'];
         yield 'bypass role without ROLE_' => [['voter' => ['bypass_roles' => ['admin']]], 'bypass_roles must list ROLE_*'];
@@ -69,6 +81,7 @@ final class ConfigurationTest extends TestCase
         yield 'unknown template page' => [['web_ui' => ['templates' => ['nope' => 'x.html.twig']]], 'Unknown nowo_rbac_kit.web_ui.templates page(s) "nope"'];
         yield 'empty access roles' => [['security' => ['access_roles' => []]], 'must contain at least one non-empty role'];
         yield 'empty manage roles' => [['security' => ['manage_roles' => [' ']]], 'must contain at least one non-empty role'];
+        yield 'null manage roles' => [['security' => ['manage_roles' => []]], 'must contain at least one non-empty role'];
         yield 'unknown key' => [['nope' => true], 'Unrecognized option "nope"'];
     }
 

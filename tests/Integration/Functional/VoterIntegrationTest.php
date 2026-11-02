@@ -49,13 +49,35 @@ final class VoterIntegrationTest extends KernelTestCase
         $alice->request('GET', '/projects/billing/settings');
         self::assertSame(403, $alice->getResponse()->getStatusCode(), 'a member without project.settings.view');
         $alice->request('GET', '/projects/other/settings');
-        self::assertSame(200, $alice->getResponse()->getStatusCode(), 'strangers are left to the controller');
+        self::assertSame(403, $alice->getResponse()->getStatusCode(), 'strangers are refused by default');
         $alice->request('GET', '/dashboard/summary');
         self::assertSame(200, $alice->getResponse()->getStatusCode());
 
         $bob = $this->client($kernel, 'bob');
         $bob->request('GET', '/dashboard/summary');
         self::assertSame(403, $bob->getResponse()->getStatusCode());
+
+        $guest = $this->client($kernel, null);
+        $guest->request('GET', '/dashboard/summary');
+        self::assertSame(401, $guest->getResponse()->getStatusCode(), 'guests get the firewall entry point');
+        $guest->request('GET', '/projects/billing/settings');
+        self::assertSame(401, $guest->getResponse()->getStatusCode());
+        $guest->request('GET', '/');
+        self::assertSame(200, $guest->getResponse()->getStatusCode(), 'routes the catalogue does not guard stay open');
+    }
+
+    #[Test]
+    public function withSkipStrangersTheControllerAnswersForNonMembers(): void
+    {
+        $config                  = self::defaultConfig();
+        $config['request_guard'] = ['enabled' => true, 'context_resolver' => 'test.request_context', 'skip_strangers' => true];
+        $kernel                  = $this->bootKernel($config, ['test.request_context' => RouteContextResolver::class]);
+
+        $alice = $this->client($kernel, 'alice');
+        $alice->request('GET', '/projects/other/settings');
+        self::assertSame(200, $alice->getResponse()->getStatusCode(), 'left to the controller (its 404 mask)');
+        $alice->request('GET', '/projects/billing/settings');
+        self::assertSame(403, $alice->getResponse()->getStatusCode());
     }
 
     #[Test]

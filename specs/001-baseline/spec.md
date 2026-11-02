@@ -30,11 +30,17 @@ coverage command; and a UiKit admin UI for the sets behind private access.
    refused.
 3. **Given** bob holds `auditor` globally, **When** a page asks the global `reports.export`, **Then** it is granted; a
    context key in any project is refused.
+4. **Given** dave holds a set in context `organization:5`, **When** a page asks a context key on `Project#5`, **Then**
+   it is refused (typed context ids, REQ-SEC-004 Appendix CI M1).
+5. **Given** carol holds the `owner` set (`all: true`) in project *mobile* only, **When** a global check asks
+   `reports.export`, **Then** it is refused: a set held in a context never grants a global key that is not flagged
+   `aggregate` (Appendix CI H1).
 
 ### US-2 — General pages by aggregation (P2)
 
-1. **Given** `global_aggregation: true` and one context granting `reports.view`, **When** a global check asks it,
-   **Then** it is granted and `PermissionChecker::filter()` returns only the granting contexts.
+1. **Given** `reports.view` flagged `aggregate: true` and one context granting it, **When** a global check asks it,
+   **Then** it is granted and `PermissionChecker::filter()` returns only the granting contexts; a global key without
+   the flag is never granted by a context-held set.
 2. **Given** `fallback_permission_set: viewer`, **When** a user without any assignment asks a global key of `viewer`,
    **Then** it is granted.
 
@@ -49,7 +55,9 @@ coverage command; and a UiKit admin UI for the sets behind private access.
 ### US-4 — Pages, routes and menus (P1)
 
 1. **Given** `request_guard.enabled` and a member without the route's key in the request's context, **When** the route
-   is requested, **Then** a 403 is returned before the controller; strangers are left to the controller.
+   is requested, **Then** a 403 is returned before the controller; strangers and unresolved contexts get 403 too
+   (`skip_strangers: true` leaves them to the controller), guests get the firewall entry point, and a route with the
+   default `_rbac_guard: false` is left to its controller.
 2. **Given** a DashboardMenu item with a route or keys, **Then** it is shown only when the route's key or one of its
    keys is granted.
 3. **Given** `nowo:rbac:check --prefix=/projects`, **Then** it fails on unguarded routes, missing catalogue routes and
@@ -82,29 +90,33 @@ coverage command; and a UiKit admin UI for the sets behind private access.
 ### Permission sets
 
 - **FR-SET-001** `PermissionSet` view, configured system sets (`all`, `except`, `locked`), `StoredPermissionSet` rows.
-- **FR-SET-002** `PermissionSetRegistry`: system sets, stored edits (ignored for locked sets), custom sets by name,
-  keys intersected with the catalogue, cache pool, `max_sets`, reset / invalidate.
+- **FR-SET-002** `PermissionSetRegistry`: system sets (`all` = context keys, `include_global`), stored edits (ignored
+  for locked sets), custom sets by name, keys intersected with the catalogue, cache pool with `cache_ttl`, `max_sets`
+  (overflow throws), reset / invalidate.
 - **FR-SET-003** Storages: `ConfigPermissionSetStorage` (read-only), `DoctrinePermissionSetStorage` with the
   `PermissionSetRecord` entity and `TablePrefixListener`, host storage service.
 - **FR-SET-004** `PermissionSetManager`: create / update / delete with validation, `max_sets`, usage check
-  (`PermissionSetUsageInterface`), `PermissionSetException` reasons and `PermissionSetChangedEvent`.
+  (`PermissionSetUsageInterface`: delete needs it; still-assigned codes cannot be created), `PermissionSetException`
+  reasons and `PermissionSetChangedEvent`.
 
 ### Grants and contexts
 
-- **FR-GRT-001** `Assignment`, `GrantProviderInterface`, `NullGrantProvider`.
+- **FR-GRT-001** `Assignment` (typed context ids; `global()`, `in()`, `of()`), `GrantProviderInterface`,
+  `NullGrantProvider`.
 - **FR-GRT-002** `GrantResolver`: union per context, global sets, aggregation helpers, one provider call per user and
   request, bounded, reset.
-- **FR-CTX-001** `RbacContextInterface`, `ContextResolverInterface`, `DefaultContextResolver`.
+- **FR-CTX-001** `RbacContextInterface` (type + id), `ContextId`, `ContextResolverInterface`, `DefaultContextResolver`.
 - **FR-CTX-002** `RequestContextResolverInterface`, `NullRequestContextResolver`.
 
 ### Voter and entry points
 
 - **FR-VOT-001** `PermissionVoter`: decision order (empty catalogue, unknown key / unmapped route / open routes, guest,
-  context subject, gates, bypass + vetoes, context sets, role grants, global sets, aggregation, fallback), memoised per
-  request, bounded, reset.
+  typed context subject, gates, bypass + vetoes, context sets, role grants, global sets, per-key aggregation, fallback),
+  memoised per request (typed context id and veto state in the key), bounded, reset.
 - **FR-VOT-002** `PermissionGateInterface`, `BypassVetoInterface`.
 - **FR-CHK-001** `PermissionChecker` (`can`, `canRoute`, `canArea`, `filter`) and `RbacTwigExtension`.
-- **FR-GRD-001** `PermissionRequestListener` (opt-in request guard).
+- **FR-GRD-001** `PermissionRequestListener` (opt-in request guard; guests, strangers and unresolved contexts refused;
+  `_rbac_guard: false` opt-out).
 - **FR-MNU-001** `RbacMenuPermissionChecker` (DashboardMenu integration).
 - **FR-COV-001** `PermissionCoverage`, `CoverageReport`, `CheckCommand`.
 
@@ -129,12 +141,12 @@ coverage command; and a UiKit admin UI for the sets behind private access.
 | --- | --- |
 | 163 FR-001 permission catalogue (key, context, routes) | FR-CAT-001 / FR-CAT-002 (`scope` instead of project / general; routes; aliases replace the spec 162 area keys) |
 | 163 FR-002 coverage test | FR-COV-001 (`nowo:rbac:check`, `PermissionCoverage`) |
-| 163 FR-003 one voter `permission:<key>`, admin bypass, project union, general by aggregation | FR-VOT-001 (`bypass_roles` empty by default; context instead of project; `global_aggregation`) |
+| 163 FR-003 one voter `permission:<key>`, admin bypass, project union, general by aggregation | FR-VOT-001 (`bypass_roles` empty by default; typed context instead of project; per-key `aggregate`) |
 | 163 FR-005 permissions loaded once per request, reset (worker mode) | FR-GRT-002, FR-VOT-001 (`ResetInterface`, bounded memos) |
 | 163 FR-006 role table seeded with system roles | FR-SET-001..003 (configured system sets + `rbac_permission_set` edits) |
 | 163 FR-007 Administration → roles (create / edit / delete, refused in use, audited) | FR-SET-004, FR-UI-001..004 |
-| 163 FR-008 owner holds every permission | `all: true, locked: true` set |
-| 163 FR-011 request listener refusing a route before the controller | FR-GRD-001 (opt-in, `skip_strangers`) |
+| 163 FR-008 owner holds every permission | `all: true, locked: true` set (every context permission of its context) |
+| 163 FR-011 request listener refusing a route before the controller | FR-GRD-001 (opt-in, `skip_strangers` off by default) |
 | 163 FR-012 Twig `can()` | FR-CHK-001 (`rbac_can()`) |
 | 163 FR-013 menus ask the voter, general pages restrict data to granting projects | FR-MNU-001, `PermissionChecker::filter()` |
 | 163 "no project role at all" default | `voter.fallback_permission_set` (off by default) |

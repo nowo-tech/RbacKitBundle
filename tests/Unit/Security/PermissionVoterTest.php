@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Nowo\RbacKitBundle\Tests\Unit\Security;
 
+use Nowo\RbacKitBundle\Context\ContextResolverInterface;
 use Nowo\RbacKitBundle\Context\DefaultContextResolver;
 use Nowo\RbacKitBundle\Grant\GrantResolver;
+use Nowo\RbacKitBundle\Permission\ConfigPermissionProvider;
 use Nowo\RbacKitBundle\Permission\Permission;
 use Nowo\RbacKitBundle\Permission\PermissionCatalog;
+use Nowo\RbacKitBundle\PermissionSet\PermissionSetRegistry;
 use Nowo\RbacKitBundle\Security\BypassVetoInterface;
 use Nowo\RbacKitBundle\Security\PermissionGateInterface;
 use Nowo\RbacKitBundle\Security\PermissionVoter;
@@ -59,9 +62,98 @@ final class PermissionVoterTest extends TestCase
         self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($this->token('alice'), null, ['permission:reports.export']));
         self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($this->token('bob'), null, ['permission:reports.export']), 'global assignment');
         self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($this->token('alice'), null, ['permission_route:dashboard_summary']));
+    }
 
-        $noAggregation = $this->voter(globalAggregation: false);
-        self::assertSame(VoterInterface::ACCESS_DENIED, $noAggregation->vote($this->token('alice'), null, ['permission:summary.view']));
+    /**
+     * Appendix CI H1: a set held in a context never grants a global key unless the key is flagged `aggregate`, and an
+     * `all: true` owner set held in a context carries context keys only.
+     */
+    #[Test]
+    public function contextHeldSetsNeverPromoteGlobalKeys(): void
+    {
+        $this->provider = new MapGrantProvider([
+            'eve'  => [['owner', 'eve-sandbox']],
+            'mike' => [['mixed', 'billing']],
+        ]);
+        $sets  = Catalogues::sets() + ['mixed' => Catalogues::set(['reports.export', 'summary.view', 'project.view'])];
+        $voter = $this->voter(sets: $sets);
+        $eve   = $this->token('eve');
+
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($eve, new Project('eve-sandbox'), ['permission:project.settings.view']), 'the owner keeps every context key in its context');
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($eve, new Project('billing'), ['permission:project.view']));
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($eve, null, ['permission:reports.export']), 'all: true holds no global key');
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($eve, null, ['permission:summary.view']), 'not even an aggregating one');
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($eve, new Project('eve-sandbox'), ['permission:reports.export']), 'nor with its context as subject');
+
+        $mike = $this->token('mike');
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($mike, null, ['permission:reports.export']), 'a global key of a context-held set is not promoted');
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($mike, null, ['permission:summary.view']), 'unless the key is flagged aggregate');
+
+        $this->provider = new MapGrantProvider(['root' => [['owner', null]]]);
+        $global         = $this->voter(sets: ['owner' => Catalogues::set([], true, [], true, true)]);
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $global->vote($this->token('root'), null, ['permission:wiki.manage']), 'include_global: a global owner set');
+    }
+
+    /**
+     * Appendix CI H1, the shipped demo: carol owns the Mobile project only and must not hold the global export that
+     * only the auditor set gives; alice (viewer) still opens the aggregated reports page.
+     */
+    #[Test]
+    public function theDemoOwnerOfOneProjectHoldsNoGlobalKey(): void
+    {
+        $catalog = new PermissionCatalog([new ConfigPermissionProvider([
+            'reports.view'           => ['scope' => 'global', 'routes' => ['demo_reports'], 'group' => 'general', 'label' => null, 'description' => null, 'aggregate' => true],
+            'reports.export'         => ['scope' => 'global', 'routes' => [], 'group' => 'general', 'label' => null, 'description' => null],
+            'project.view'           => ['scope' => 'context', 'routes' => ['demo_project'], 'group' => 'project', 'label' => null, 'description' => null],
+            'project.issues.triage'  => ['scope' => 'context', 'routes' => [], 'group' => 'project', 'label' => null, 'description' => null],
+            'project.settings.view'  => ['scope' => 'context', 'routes' => ['demo_project_settings'], 'group' => 'project', 'label' => null, 'description' => null],
+            'project.members.manage' => ['scope' => 'context', 'routes' => [], 'group' => 'project', 'label' => null, 'description' => null],
+        ])]);
+        $this->provider = new MapGrantProvider([
+            'alice' => [['viewer', 'billing'], ['triage', 'billing'], ['viewer', 'mobile']],
+            'bob'   => [['auditor', null]],
+            'carol' => [['owner', 'mobile']],
+        ]);
+        $voter = $this->voter(catalog: $catalog, sets: [
+            'viewer'  => Catalogues::set(['reports.view', 'project.view']),
+            'triage'  => Catalogues::set(['project.view', 'project.issues.triage']),
+            'auditor' => Catalogues::set(['reports.view', 'reports.export']),
+            'owner'   => Catalogues::set([], true, [], true),
+        ]);
+
+        $carol = $this->token('carol');
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($carol, null, ['permission:reports.export']));
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($carol, null, ['permission:reports.view']));
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($carol, new Project('mobile'), ['permission:project.members.manage']));
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($carol, new Project('billing'), ['permission:project.view']));
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($this->token('alice'), null, ['permission:reports.view']), 'reports.view aggregates');
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($this->token('alice'), null, ['permission:reports.export']));
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($this->token('bob'), null, ['permission:reports.export']), 'the global auditor');
+    }
+
+    /**
+     * Appendix CI M1: context ids are typed — `organization:5` and `project:5` are two contexts.
+     */
+    #[Test]
+    public function contextTypesWithTheSameIdDoNotShareGrants(): void
+    {
+        $this->provider = new MapGrantProvider(['dave' => [['owner', 'organization:5']]]);
+        $voter          = $this->voter();
+        $dave           = $this->token('dave');
+
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($dave, new Project('5', 'organization'), ['permission:project.settings.view']));
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($dave, new Project('5'), ['permission:project.settings.view']), 'another type, same id');
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($dave, new Project('5', 'Bad Type'), ['permission:project.settings.view']), 'invalid type: not a context');
+
+        $untyped = new class implements ContextResolverInterface {
+            public function contextId(object $subject): string
+            {
+                return '5';
+            }
+        };
+        $vote = new Vote();
+        self::assertSame(VoterInterface::ACCESS_DENIED, $this->voter(resolver: $untyped)->vote($dave, new Project('5', 'organization'), ['permission:project.settings.view'], $vote), 'an untyped id from a custom resolver is refused');
+        self::assertContains('The context resolver returned an untyped context id.', $vote->reasons);
     }
 
     #[Test]
@@ -144,7 +236,7 @@ final class PermissionVoterTest extends TestCase
                 return true;
             }
         };
-        $voter = $this->voter(gates: [$gate], memoLimit: 2);
+        $voter = $this->voter(gates: [$gate], memoLimit: 3);
         $alice = $this->token('alice');
         $voter->vote($alice, new Project('billing'), ['permission:project.view']);
         $voter->vote($alice, new Project('billing'), ['permission:project.view']);
@@ -152,13 +244,54 @@ final class PermissionVoterTest extends TestCase
 
         $voter->vote($alice, new Project('mobile'), ['permission:project.view']);
         $voter->vote($alice, new Project('other'), ['permission:project.view']);
+        $voter->vote($alice, new Project('more'), ['permission:project.view']);
         $voter->vote($alice, new Project('billing'), ['permission:project.view']);
-        self::assertSame(4, $gate->calls, 'the bounded memo was cleared');
+        self::assertSame(5, $gate->calls, 'the bounded memo was cleared');
 
         $voter->reset();
         $voter->vote($alice, new Project('billing'), ['permission:project.view']);
-        self::assertSame(5, $gate->calls);
+        self::assertSame(6, $gate->calls);
         self::assertSame(1, $this->provider->calls, 'one grant load for the whole request');
+    }
+
+    /**
+     * Appendix CI L5: the memo includes the subject's context for global keys, skips non-context subjects and the
+     * veto state is part of the key.
+     */
+    #[Test]
+    public function theMemoFollowsTheSubjectAndTheVetoState(): void
+    {
+        $gate = new class implements PermissionGateInterface {
+            public int $calls = 0;
+
+            public function allows(Permission $permission, object $user, ?object $subject): bool
+            {
+                ++$this->calls;
+
+                return (!$subject instanceof Project || $subject->id !== 'archived') && !($subject instanceof stdClass);
+            }
+        };
+        $veto = new class implements BypassVetoInterface {
+            public bool $asMember = false;
+
+            public function vetoes(TokenInterface $token, ?object $subject): bool
+            {
+                return $this->asMember;
+            }
+        };
+        $voter = $this->voter(bypassRoles: ['ROLE_SUPER'], gates: [$gate], vetoes: [$veto]);
+        $alice = $this->token('alice');
+
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($alice, new Project('live'), ['permission:summary.view']));
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($alice, new Project('archived'), ['permission:summary.view']), 'global key, other subject: asked again');
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($alice, new stdClass(), ['permission:summary.view']));
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($alice, new stdClass(), ['permission:summary.view']));
+        self::assertSame(4, $gate->calls, 'non-context subjects are not memoised');
+
+        $root = $this->token('root', ['ROLE_SUPER']);
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($root, null, ['permission:wiki.manage']));
+        $veto->asMember = true;
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($root, null, ['permission:wiki.manage']), 'a veto switched on mid-request is seen');
     }
 
     /**
@@ -167,6 +300,7 @@ final class PermissionVoterTest extends TestCase
      * @param list<string> $openRoutes
      * @param list<PermissionGateInterface> $gates
      * @param list<BypassVetoInterface> $vetoes
+     * @param array<string, array{label: string|null, description: string|null, permissions: list<string>, all: bool, include_global: bool, except: list<string>, locked: bool}>|null $sets
      */
     private function voter(
         ?PermissionCatalog $catalog = null,
@@ -175,16 +309,17 @@ final class PermissionVoterTest extends TestCase
         array $roleGrants = [],
         array $openRoutes = [],
         bool $allowUnmapped = false,
-        bool $globalAggregation = true,
         ?string $fallbackSet = null,
         array $gates = [],
         array $vetoes = [],
         int $memoLimit = 2048,
+        ?array $sets = null,
+        ?ContextResolverInterface $resolver = null,
     ): PermissionVoter {
         $catalog ??= Catalogues::catalog();
-        $sets = Catalogues::registry(new MemoryStorage(), $catalog);
+        $registry = new PermissionSetRegistry($catalog, new MemoryStorage(), $sets ?? Catalogues::sets());
 
-        return new PermissionVoter($catalog, new GrantResolver($this->provider, $sets), $sets, new DefaultContextResolver(), $hierarchy, $bypassRoles, $roleGrants, $openRoutes, $allowUnmapped, $globalAggregation, $fallbackSet, $gates, $vetoes, $memoLimit);
+        return new PermissionVoter($catalog, new GrantResolver($this->provider, $registry), $registry, $resolver ?? new DefaultContextResolver(), $hierarchy, $bypassRoles, $roleGrants, $openRoutes, $allowUnmapped, $fallbackSet, $gates, $vetoes, $memoLimit);
     }
 
     /**

@@ -48,6 +48,7 @@ Scope: every file under `src/`. Audit command: `find src -type f | wc -l` → **
 
 | Source file | Spec section | Requirement IDs |
 | --- | --- | --- |
+| `src/Context/ContextId.php` | Grants and contexts | FR-CTX-001 |
 | `src/Context/ContextResolverInterface.php` | Grants and contexts | FR-CTX-001 |
 | `src/Context/DefaultContextResolver.php` | Grants and contexts | FR-CTX-001 |
 | `src/Context/NullRequestContextResolver.php` | Grants and contexts | FR-CTX-002 |
@@ -123,12 +124,12 @@ Scope: every file under `src/`. Audit command: `find src -type f | wc -l` → **
 | Bundle and dependency injection | 6 |
 | Catalogue | 5 |
 | Permission sets | 12 |
-| Grants and contexts | 9 |
+| Grants and contexts | 10 |
 | Voter and entry points | 7 |
 | Coverage | 3 |
 | Admin UI security | 5 |
 | Admin UI (HTTP, forms, view models, Twig) | 11 |
 | Translations | 7 |
-| **Total production sources** | **65** |
+| **Total production sources** | **66** |
 
-Mapped 65 / 65 files under `src/` (100%). No generated or build output is shipped under `src/`.
+Mapped 66 / 66 files under `src/` (100%). No generated or build output is shipped under `src/`.

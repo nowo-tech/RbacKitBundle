@@ -10,7 +10,7 @@ namespace Nowo\RbacKitBundle\Permission;
 final readonly class ConfigPermissionProvider implements PermissionProviderInterface
 {
     /**
-     * @param array<string, array{scope: string, routes: list<string>, group: string|null, label: string|null, description: string|null}> $permissions key => definition
+     * @param array<string, array{scope: string, routes: list<string>, group: string|null, label: string|null, description: string|null, aggregate?: bool}> $permissions key => definition
      */
     public function __construct(
         private array $permissions = [],
@@ -32,6 +32,7 @@ final readonly class ConfigPermissionProvider implements PermissionProviderInter
                 $definition['group'],
                 $definition['label'],
                 $definition['description'],
+                $definition['aggregate'] ?? false,
             );
         }
     }

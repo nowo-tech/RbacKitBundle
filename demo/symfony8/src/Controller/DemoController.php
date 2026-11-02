@@ -37,8 +37,8 @@ final class DemoController extends AbstractController
     }
 
     /**
-     * The request guard answers 403 to members without the permission; the controller keeps its own check for users
-     * outside the project (request_guard.skip_strangers), as an application would (or a 404 existence mask).
+     * The request guard answers 403 to users without the permission (members and strangers alike); the controller
+     * keeps its own check as a second layer, as an application would.
      */
     #[Route('/projects/{project}', name: 'demo_project', requirements: ['project' => '[a-z]+'])]
     public function project(string $project): Response

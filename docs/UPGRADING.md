@@ -3,6 +3,7 @@
 ## Table of contents
 
 - [Unreleased](#unreleased)
+  - [From the audited candidate 8bd695a](#from-the-audited-candidate-8bd695a)
 - [To 1.0.0](#to-100)
   - [Requirements](#requirements)
   - [Adopting the kit from an in-app permission layer](#adopting-the-kit-from-an-in-app-permission-layer)
@@ -10,6 +11,40 @@
   - [Breaking changes](#breaking-changes)
 
 ## Unreleased
+
+### From the audited candidate 8bd695a
+
+1.0.0 is not tagged yet; hosts that installed `dev-main` before the REQ-SEC-004 fixes (Appendix CI) must apply these
+changes. No database migration is needed: the bundle's table (`rbac_permission_set`) is unchanged and assignments live
+in the host.
+
+1. **Typed context ids (M1)**. Add `getRbacContextType()` to every `RbacContextInterface` class — a stable alias such as
+   `project` or `organization` (`^[a-z][a-z0-9_]{0,39}$`), never a class name. Build assignments with
+   `Assignment::in('owner', 'project', (string) $projectId)`, `Assignment::of('owner', $project)` or
+   `Assignment::global('auditor')`; `new Assignment('owner', '5')` now throws. A custom `ContextResolverInterface` must
+   return `ContextId::of($type, $id)`. Stored assignments in the host keep their raw ids: the grant provider adds the
+   type when it builds the `Assignment` (no data migration). If the host stores pre-built composite ids, migrate them
+   to `<type>:<id>` in its own migration.
+2. **Global aggregation (H1)**. Remove `voter.global_aggregation`. For each global key that fronts a "general page
+   showing the data of my contexts" (reports, summary, chat directory…), add `aggregate: true` to its catalogue entry
+   and keep filtering its data with `PermissionChecker::filter()`. Do not flag platform keys (user administration,
+   billing, exports).
+3. **Owner sets (H1)**. `all: true` now means every **context** key. A set meant to hold every key platform-wide (and
+   assigned globally) needs `include_global: true`. Drop `except: [<global keys>]` entries that only existed to keep
+   global keys out of an owner set.
+4. **Request guard (L1)**. Guests on catalogued routes get the firewall's entry point; strangers and unresolved
+   contexts get 403. Keep the old behaviour with `request_guard.skip_strangers: true`, or opt single routes out with
+   the route default `_rbac_guard: false` (share links, public pages) — those controllers must check access
+   themselves. Enabling the guard without `request_guard.context_resolver` now refuses every context route unless
+   `skip_strangers: true`.
+5. **Admin managers (L6)**. `security.manage_roles` defaults to `[ROLE_ADMIN]`. Set it explicitly if another role
+   managed sets through `access_roles`.
+6. **Deleting sets (L2)**. Configure `storage.usage_provider` to keep the delete action; without it custom sets cannot
+   be deleted. A code that is still assigned cannot be re-created until its assignments are removed.
+7. **Cache and bounds (L3, L4)**. `storage.cache_ttl` (default 300) bounds how long a per-host cache serves a revoked
+   key. If the table holds more rows than `storage.max_sets`, the registry throws: raise the bound or delete rows.
+8. **Gates and vetoes (L5)**. Vetoes are now asked on every decision of a bypass role; keep them cheap. Gates receiving
+   a non-context subject are no longer memoised.
 
 ## To 1.0.0
 
@@ -58,4 +93,4 @@ New: `admin/index.html.twig`, `admin/catalogue.html.twig`, `admin/form.html.twig
 
 ### Breaking changes
 
-None (first release).
+None (first release). Changes relative to the pre-release candidate: [Unreleased](#unreleased).

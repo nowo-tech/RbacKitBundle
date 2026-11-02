@@ -30,8 +30,9 @@
   (inside one context: a project, a tenant…) — and the routes it guards.
 - **Permission set** ("role"): a named collection of keys. Two sets need not be comparable; nothing compares roles by
   level.
-- **Assignment**: a user holds a set in one context, or globally. A user's permissions in a context are the **union**
-  of the sets they hold there (direct membership, group links…).
+- **Assignment**: a user holds a set in one context (a typed id such as `project:5`), or globally. A user's permissions
+  in a context are the **union** of the sets they hold there (direct membership, group links…). A set held in a context
+  never grants a global key, except keys flagged `aggregate`.
 
 ## Asking a permission
 
@@ -75,12 +76,13 @@ flowchart TD
     J -- yes --> K{a set held in that context grants it?}
     K -- yes --> G
     K -- no --> D
-    J -- no --> L{role_grants / global set / aggregation / fallback set}
+    J -- no --> L{role_grants / global set / aggregate key held in a context / fallback set}
     L -- yes --> G
     L -- no --> D
 ```
 
-Every decision is memoised per request for (user, roles, key, context) and forgotten between requests.
+Every decision is memoised per request for (user, roles, key, the subject's typed context id, bypass veto state) and
+forgotten between requests; a subject that is not a context is never memoised.
 
 ## Contexts
 
@@ -89,14 +91,34 @@ Make the objects permissions are evaluated in implement `RbacContextInterface`:
 ```php
 final class Project implements RbacContextInterface
 {
+    public function getRbacContextType(): string
+    {
+        return 'project';                 // stable alias, never a class name
+    }
+
     public function getRbacContextId(): string
     {
-        return (string) $this->uuid;
+        return (string) $this->id;
+    }
+}
+
+final class Organization implements RbacContextInterface
+{
+    public function getRbacContextType(): string
+    {
+        return 'organization';            // Organization#5 and Project#5 are two contexts
+    }
+
+    public function getRbacContextId(): string
+    {
+        return (string) $this->id;
     }
 }
 ```
 
-When you cannot change the class, implement `ContextResolverInterface` and set `context_resolver`.
+The voter compares typed ids (`project:5`, `organization:5`), so integer ids may collide across classes without
+sharing grants. When you cannot change the class, implement `ContextResolverInterface` (return
+`ContextId::of('project', (string) $subject->getId())`) and set `context_resolver`.
 
 ## Grant provider
 
@@ -108,7 +130,9 @@ final class MembershipGrantProvider implements GrantProviderInterface
     public function assignmentsOf(object $user): iterable
     {
         foreach ($this->memberships->activeRolesOf($user) as $row) {      // one query
-            yield new Assignment($row['role_code'], $row['project_uuid']); // null context = global assignment
+            yield $row['project_id'] === null
+                ? Assignment::global($row['role_code'])
+                : Assignment::in($row['role_code'], 'project', (string) $row['project_id']);
         }
     }
 }
@@ -136,13 +160,26 @@ final class WikiPermissions implements PermissionProviderInterface
 
 `PermissionGateInterface` services are asked first, for everybody (bypass roles included) — for example "the paying
 account's plan leaves this module out". `BypassVetoInterface` services suspend `voter.bypass_roles` for one decision —
-for example an administrator previewing a project as a member. Both are autoconfigured; their answers are memoised per
-request with the decision, so they must depend only on (user, key, context).
+for example an administrator previewing a project as a member. Both are autoconfigured. Gate answers are memoised per
+request with the decision (user, roles, key, the subject's typed context id, veto state), so they must not depend on
+mutable request state — call `PermissionVoter::reset()` if it changes; a subject that is not a context is never
+memoised. Vetoes are asked on every decision of a bypass role, so a "view as member" switch toggled mid-request is
+seen at once.
 
 ## General pages that aggregate contexts
 
-With `voter.global_aggregation: true` (default) a global key such as `reports.view` passes when at least one of the
-user's contexts grants it. Show the data of those contexts only:
+Flag a global key `aggregate: true` in the catalogue to let it pass when at least one of the user's contexts grants it
+(default `false`: a set held in a context never grants a global key):
+
+```yaml
+nowo_rbac_kit:
+    catalogue:
+        permissions:
+            reports.view: { scope: global, routes: [app_reports], aggregate: true }
+            reports.export: { scope: global }                # never promoted from a project-held set
+```
+
+Show the data of the granting contexts only:
 
 ```php
 $projects = $checker->filter($projectRepository->ofUser($user), 'reports.view');
@@ -154,9 +191,11 @@ $projects = $checker->filter($projectRepository->ofUser($user), 'reports.view');
 ## Request guard
 
 With `request_guard.enabled` a main request to a catalogued route answers 403 before the controller when the key is not
-granted. Implement `RequestContextResolverInterface` to give it the request's context (memoise the lookup on the
-request attributes) and set `request_guard.context_resolver`. Controllers keep their own checks for users outside the
-context (`skip_strangers`).
+granted (guests get the firewall's entry point). Implement `RequestContextResolverInterface` to give it the request's
+context (memoise the lookup on the request attributes) and set `request_guard.context_resolver`; users holding no set
+in the context, and requests whose context cannot be resolved, are refused. With `skip_strangers: true` those are left
+to the controller (404 existence mask); a route with the default `_rbac_guard: false` is always left to its controller
+(share links). Controllers keep `denyAccessUnlessGranted()` as a second layer.
 
 ## Menus (DashboardMenu)
 
