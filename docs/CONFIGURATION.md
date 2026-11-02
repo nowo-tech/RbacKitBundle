@@ -100,7 +100,7 @@ never grants.
 - `aggregate: true` (global keys only) — asked without a subject, the key is also granted when a set the user holds in
   **any** context contains it (the general page opens); asked with a context subject — `PermissionChecker::filter()`,
   `rbac_can(key, project)` — only the sets held in **that** context count, so the page shows the data of the granting
-  contexts only.
+  contexts only. A subject that does not resolve to a typed context grants nothing through aggregation.
   Default `false`: a set held in a context never grants a global key. Never flag platform keys (user administration,
   billing, exports): every member of any context would hold them.
 

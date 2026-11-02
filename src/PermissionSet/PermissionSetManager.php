@@ -80,8 +80,9 @@ final readonly class PermissionSetManager
         }
 
         $keys = $this->known($permissions);
-        $this->storage->save(new StoredPermissionSet($code, $this->name($name), $this->description($description), false, $keys, $this->actorId($actor), $this->clock?->now()));
-        $this->enforceBound($code);
+        $row  = new StoredPermissionSet($code, $this->name($name), $this->description($description), false, $keys, $this->actorId($actor), $this->clock?->now());
+        $this->storage->save($row);
+        $this->enforceBound($row);
 
         return $this->changed(PermissionSetChangedEvent::CREATED, $code, ['permissions' => count($keys), 'added' => $keys, 'removed' => []], $actor);
     }
@@ -105,9 +106,10 @@ final readonly class PermissionSetManager
         }
 
         $keys = $this->known($permissions);
-        $this->storage->save(new StoredPermissionSet($code, $this->name($name), $this->description($description), $set->system, $keys, $this->actorId($actor), $this->clock?->now()));
+        $row  = new StoredPermissionSet($code, $this->name($name), $this->description($description), $set->system, $keys, $this->actorId($actor), $this->clock?->now());
+        $this->storage->save($row);
         if (!$set->stored) {
-            $this->enforceBound($code);
+            $this->enforceBound($row);
         }
 
         return $this->changed(PermissionSetChangedEvent::UPDATED, $code, [
@@ -166,19 +168,35 @@ final readonly class PermissionSetManager
 
     /**
      * The bound is checked before saving without a lock: when concurrent creates pushed the table past
-     * `storage.max_sets`, the new row is removed again and the change is refused (the registry would otherwise throw on
-     * every read).
+     * `storage.max_sets`, the row this request wrote is removed again and the change is refused (the registry would
+     * otherwise throw on every read). Only the row this request wrote is removed: when another manager's write replaced
+     * it (same code, other content), that row is kept.
      *
      * @throws PermissionSetException
      */
-    private function enforceBound(string $code): void
+    private function enforceBound(StoredPermissionSet $saved): void
     {
-        if ($this->registry->storedCount() > $this->maxSets) {
-            $this->storage->delete($code);
-            $this->registry->invalidate();
-
-            throw PermissionSetException::of(PermissionSetException::LIMIT);
+        $stored = $this->registry->storedCount();
+        if ($stored <= $this->maxSets) {
+            return;
         }
+
+        foreach ($this->storage->load($stored) as $row) {
+            if ($row->code === $saved->code && $this->sameContent($row, $saved)) {
+                $this->storage->delete($saved->code);
+            }
+        }
+        $this->registry->invalidate();
+
+        throw PermissionSetException::of(PermissionSetException::LIMIT);
+    }
+
+    /**
+     * Whether a stored row is the one this request wrote (the storage may set its own timestamp).
+     */
+    private function sameContent(StoredPermissionSet $a, StoredPermissionSet $b): bool
+    {
+        return [$a->name, $a->description, $a->system, $a->permissions, $a->updatedBy] === [$b->name, $b->description, $b->system, $b->permissions, $b->updatedBy];
     }
 
     /**

@@ -16,6 +16,7 @@ use Nowo\RbacKitBundle\Security\PermissionGateInterface;
 use Nowo\RbacKitBundle\Security\PermissionVoter;
 use Nowo\RbacKitBundle\Tests\Fixtures\MapGrantProvider;
 use Nowo\RbacKitBundle\Tests\Fixtures\Project;
+use Nowo\RbacKitBundle\Tests\Fixtures\ReportRow;
 use Nowo\RbacKitBundle\Tests\Support\Catalogues;
 use Nowo\RbacKitBundle\Tests\Support\MemoryStorage;
 use PHPUnit\Framework\Attributes\Test;
@@ -78,9 +79,45 @@ final class PermissionVoterTest extends TestCase
         self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($alice, new Project('billing'), ['permission:summary.view']));
         self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($alice, new Project('mobile'), ['permission:summary.view']), 'a non-granting context');
         self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($alice, new Project('billing', 'organization'), ['permission:summary.view']), 'same id, other type');
-        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($alice, new stdClass(), ['permission:summary.view']), 'a non-context subject: any context');
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($alice, new stdClass(), ['permission:summary.view']), 'N7: a non-context subject grants nothing through aggregation');
         self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($this->token('gwen'), new Project('mobile'), ['permission:summary.view']), 'a global assignment holds it everywhere');
         self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($this->token('rita', ['ROLE_REPORTER']), new Project('mobile'), ['permission:summary.view']), 'a role grant holds it everywhere');
+    }
+
+    /**
+     * Re-verification N7: a subject that is given but does not resolve to a typed context fails closed for an aggregate
+     * key (a context key is refused in the same case); a resolver that unwraps the subject decides in its context.
+     */
+    #[Test]
+    public function unresolvedSubjectsGrantNothingThroughAggregation(): void
+    {
+        $this->provider = new MapGrantProvider(['alice' => [['viewer', 'billing']]]);
+        $voter          = $this->voter();
+        $alice          = $this->token('alice');
+        $row            = new ReportRow(new Project('billing'));
+
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($alice, $row, ['permission:summary.view']), 'a report row wrapping a project');
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($alice, new Project('billing', 'Project'), ['permission:summary.view']), 'a wrong-case type');
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($alice, new Project(' '), ['permission:summary.view']), 'a blank id');
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($alice, null, ['permission:summary.view']), 'without a subject it still aggregates');
+
+        $untyped = new class implements ContextResolverInterface {
+            public function contextId(object $subject): string
+            {
+                return 'billing';
+            }
+        };
+        self::assertSame(VoterInterface::ACCESS_DENIED, $this->voter(resolver: $untyped)->vote($alice, new Project('billing'), ['permission:summary.view']), 'a custom resolver that forgets the type');
+
+        $unwrapping = new class implements ContextResolverInterface {
+            public function contextId(object $subject): ?string
+            {
+                return (new DefaultContextResolver())->contextId($subject instanceof ReportRow ? $subject->project : $subject);
+            }
+        };
+        $voter = $this->voter(resolver: $unwrapping);
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($alice, $row, ['permission:summary.view']), 'a resolver that unwraps the row');
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($alice, new ReportRow(new Project('mobile')), ['permission:summary.view']));
     }
 
     /**

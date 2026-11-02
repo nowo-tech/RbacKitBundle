@@ -124,6 +124,7 @@ The bundle is not self-graded. The independent AI audit is recorded in the monor
 | --- | --- | --- | --- | --- | --- |
 | First pass (Appendix CI) | 2026-11-01 | `8bd695a` | Fail (High open) / High | H1 global aggregation promoted the global keys of any context-held set (owner `all: true` included); M1 untyped context ids; L1 guard let guests / strangers through; L2 re-created codes inherited stale assignments; L3 cache entry never expired; L4 rows beyond `max_sets` dropped silently; L5 memo ignored the subject of global keys and the veto state; L6 `manage_roles` defaulted to `access_roles`; I1–I7 informational | Unreleased (this branch): every High / Medium / Low fixed in code (see the threat table); informational notes below |
 | Re-verification | 2026-11-02 | `570b756` | H1, M1, L1–L6 confirmed fixed; new findings open | N1 (Medium) an `aggregate` key ignored the context subject, so `filter()` / `rbac_can(key, project)` returned non-granting contexts; N2 (Low) concurrent creates could exceed `storage.max_sets` and make every check throw; N3 (Info) usage-provider contract for `code_assigned` | Unreleased (this branch): N1 the aggregate branch is decided in the subject's context; N2 the manager re-counts after saving a new row and rolls it back (`error.limit`); N3 documented on `PermissionSetUsageInterface` |
+| Final re-verification | 2026-11-02 | `199d0b4` | Pass | N7 (Low) an `aggregate` key asked with a subject that does not resolve to a typed context fell back to any of the user's contexts; N8 (Info) the `max_sets` rollback deleted by code, so it could remove another manager's same-code row | Unreleased (this branch): N7 such a subject grants nothing through aggregation; N8 the rollback removes only the row the request wrote (same content) |
 
 ## Residual risks and host guidance
 
@@ -135,7 +136,8 @@ The bundle is not self-graded. The independent AI audit is recorded in the monor
   decision of a bypass role and must be cheap.
 - A key flagged `aggregate: true` opens a general page when one context grants it: filter its data with
   `PermissionChecker::filter()` (or ask the key with each context as subject), which keeps only the contexts where a
-  held set grants the key — the voter decides the aggregate branch in the subject's context (re-verification N1) —
+  held set grants the key — the voter decides the aggregate branch in the subject's context (re-verification N1), and a
+  subject that does not resolve to a typed context grants nothing through it (N7); pass context objects —
   and never flag a platform-level key (user administration, billing, exports) as aggregatable.
 - `unmapped_routes: allow` and `catalogue.open_routes` open routes to everybody on `permission_route:` (menus): use
   them only for public pages (Appendix CI I5, accepted).

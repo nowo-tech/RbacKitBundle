@@ -8,18 +8,22 @@ use Nowo\RbacKitBundle\PermissionSet\PermissionSetStorageInterface;
 use Nowo\RbacKitBundle\PermissionSet\StoredPermissionSet;
 
 /**
- * Storage of the race tests: the first save also stores the row of a concurrent request (written between this
- * request's bound check and its save).
+ * Storage of the race tests: the first save also stores the rows of concurrent requests, written just before it (between
+ * this request's bound check and its save) and just after it (a same-code write of another manager).
  */
 final class RacingStorage implements PermissionSetStorageInterface
 {
-    private ?StoredPermissionSet $concurrent;
+    private bool $raced = false;
 
+    /**
+     * @param list<StoredPermissionSet> $before
+     * @param list<StoredPermissionSet> $after
+     */
     public function __construct(
         public readonly MemoryStorage $inner,
-        StoredPermissionSet $concurrent,
+        private readonly array $before,
+        private readonly array $after = [],
     ) {
-        $this->concurrent = $concurrent;
     }
 
     public function load(int $limit): array
@@ -39,11 +43,15 @@ final class RacingStorage implements PermissionSetStorageInterface
 
     public function save(StoredPermissionSet $set): void
     {
-        if ($this->concurrent instanceof StoredPermissionSet) {
-            $this->inner->save($this->concurrent);
-            $this->concurrent = null;
+        $raced       = $this->raced;
+        $this->raced = true;
+        foreach ($raced ? [] : $this->before as $row) {
+            $this->inner->save($row);
         }
         $this->inner->save($set);
+        foreach ($raced ? [] : $this->after as $row) {
+            $this->inner->save($row);
+        }
     }
 
     public function delete(string $code): void

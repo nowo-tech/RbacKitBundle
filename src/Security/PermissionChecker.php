@@ -53,7 +53,9 @@ final readonly class PermissionChecker
     /**
      * The given contexts where the current user holds the key, in their order. For an `aggregate` global key this is
      * the isolation control of general pages: a context is kept only when a set held **in it** grants the key (or the
-     * user holds the key platform-wide: role grant, global assignment, fallback set, bypass role).
+     * user holds the key platform-wide: role grant, global assignment, fallback set, bypass role). Pass **context
+     * objects** (or objects the `context_resolver` maps to a context): any other object is never kept through
+     * aggregation.
      *
      * @template T of object
      *

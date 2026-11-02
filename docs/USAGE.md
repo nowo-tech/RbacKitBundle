@@ -189,6 +189,11 @@ contexts only:
 $projects = $checker->filter($projectRepository->ofUser($user), 'reports.view');   // only the granting projects
 ```
 
+`filter()` and `rbac_can(key, subject)` take **context objects** (or objects your `context_resolver` maps to a
+context). A subject that does not resolve to a typed context — a report row wrapping a project, a wrong type, a blank
+id — grants nothing through aggregation (fail closed): pass the project itself, or unwrap such rows in a custom
+`ContextResolverInterface`.
+
 `voter.fallback_permission_set` lets users without any assignment keep the general pages (a new account), and
 `role_grants` gives platform roles global keys.
 

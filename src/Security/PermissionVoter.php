@@ -39,7 +39,8 @@ use function substr;
  * assignment, — only for keys flagged `aggregate` — when a set the user holds in a context grants it, or — for users
  * without any assignment — when `voter.fallback_permission_set` grants it. The aggregate branch looks at **the
  * subject's context** when the key is asked with one (`isGranted('permission:reports.view', $project)`,
- * {@see PermissionChecker::filter()}), and at any of the user's contexts only when it is asked without a context. A
+ * {@see PermissionChecker::filter()}), and at any of the user's contexts only when it is asked **without a subject**;
+ * a subject that does not resolve to a typed context grants nothing through the aggregate branch (fail closed). A
  * set held in a context never grants a global key that is not flagged `aggregate` (context → global isolation).
  *
  * Decisions are memoised per request (bounded) for (user, roles, key, context id of the subject, bypass veto state)
@@ -180,7 +181,8 @@ final class PermissionVoter extends Voter implements ResetInterface
     /**
      * @param list<string> $roles reachable role names
      * @param bool $bypass a bypass role applies (not vetoed)
-     * @param string|null $subjectContextId typed context id of the subject (an aggregate key is decided in it only)
+     * @param string|null $subjectContextId typed context id of the subject (an aggregate key is decided in it only;
+     *                                      null with a subject = not a context, the aggregate branch refuses)
      */
     private function decide(Permission $permission, UserInterface $user, ?object $subject, ?string $contextId, array $roles, bool $bypass, ?string $subjectContextId): bool
     {
@@ -205,18 +207,22 @@ final class PermissionVoter extends Voter implements ResetInterface
         }
 
         return $this->grants->grantsGlobally($user, $permission->key)
-            || ($permission->aggregate && $this->aggregates($user, $permission->key, $subjectContextId))
+            || ($permission->aggregate && $this->aggregates($user, $permission->key, $subject, $subjectContextId))
             || ($this->fallbackSet !== null && !$this->grants->holdsAnyAssignment($user) && isset($this->sets->keysOf($this->fallbackSet)[$permission->key]));
     }
 
     /**
-     * An aggregate key: granted by the subject's context when there is one, otherwise by any of the user's contexts.
+     * An aggregate key: without a subject, granted by any of the user's contexts; with a subject, granted only by the
+     * subject's typed context — a subject that does not resolve to one (a wrapper object, a bad type, a blank id, an
+     * untyped id from a custom resolver) grants nothing.
      */
-    private function aggregates(UserInterface $user, string $key, ?string $subjectContextId): bool
+    private function aggregates(UserInterface $user, string $key, ?object $subject, ?string $subjectContextId): bool
     {
-        return $subjectContextId !== null
-            ? $this->grants->grants($user, $subjectContextId, $key)
-            : $this->grants->contextsGranting($user, $key) !== [];
+        if ($subject === null) {
+            return $this->grants->contextsGranting($user, $key) !== [];
+        }
+
+        return $subjectContextId !== null && $this->grants->grants($user, $subjectContextId, $key);
     }
 
     private function bypassVetoed(TokenInterface $token, ?object $subject): bool

@@ -56,7 +56,8 @@ All notable changes to this project are documented here. The format follows
   `OverflowException` (logged `critical`) instead of dropping rows.
 - An `aggregate` global key asked with a context subject (`isGranted('permission:reports.view', $project)`,
   `rbac_can(key, project)`, `PermissionChecker::filter()`) is decided in that context only; asked without a subject
-  it still aggregates every context of the user.
+  it still aggregates every context of the user; asked with a subject that does not resolve to a typed context it
+  grants nothing through aggregation (fail closed).
 - A create (or first edit of a system set) that a concurrent request pushed past `storage.max_sets` is rolled back
   and refused (`error.limit`).
 - The decision memo includes the subject's typed context id (global keys too) and the bypass veto state; subjects that
@@ -72,4 +73,6 @@ All notable changes to this project are documented here. The format follows
   expired), L4 (rows beyond `max_sets` silently dropped), L5 (memo ignored the subject of global keys and the veto
   state), L6 (`manage_roles` defaulted to `access_roles`). Re-verification on `570b756`: N1 (an `aggregate` key ignored the context
   subject, so `filter()` returned non-granting contexts), N2 (concurrent creates could exceed `max_sets` and make
-  every read throw), N3 (usage-provider contract for `code_assigned` documented). Residuals in [SECURITY.md](SECURITY.md#residual-risks-and-host-guidance).
+  every read throw), N3 (usage-provider contract for `code_assigned` documented); final pass on `199d0b4`: N7 (an
+  `aggregate` key asked with an unresolvable subject fell back to any context), N8 (the `max_sets` rollback could
+  delete another manager's same-code row; it now removes only the row the request wrote). Residuals in [SECURITY.md](SECURITY.md#residual-risks-and-host-guidance).

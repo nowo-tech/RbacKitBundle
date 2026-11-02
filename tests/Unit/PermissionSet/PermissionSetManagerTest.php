@@ -193,7 +193,7 @@ final class PermissionSetManagerTest extends TestCase
     {
         foreach ([static fn (PermissionSetManager $m): mixed => $m->create('custom', 'Name', null, []), static fn (PermissionSetManager $m): mixed => $m->update('viewer', 'Name', null, [])] as $change) {
             $inner    = new MemoryStorage([new StoredPermissionSet('in_use', 'Used', null, false, ['summary.view'])]);
-            $storage  = new RacingStorage($inner, new StoredPermissionSet('racer', 'Racer', null, false, []));
+            $storage  = new RacingStorage($inner, [new StoredPermissionSet('racer', 'Racer', null, false, [])]);
             $registry = Catalogues::registry($storage);
             $manager  = new PermissionSetManager($registry, Catalogues::catalog(), $storage, 2, $this->events, new StaticUsage());
             try {
@@ -207,9 +207,28 @@ final class PermissionSetManagerTest extends TestCase
         }
         self::assertSame([], $this->events->events);
 
-        $quiet   = new RacingStorage(new MemoryStorage(), new StoredPermissionSet('racer', 'Racer', null, false, []));
+        $quiet   = new RacingStorage(new MemoryStorage(), [new StoredPermissionSet('racer', 'Racer', null, false, [])]);
         $manager = new PermissionSetManager(Catalogues::registry($quiet), Catalogues::catalog(), $quiet, 2, null, new StaticUsage());
         self::assertSame('custom', $manager->create('custom', 'Name', null, [])->code, 'within the bound the race is harmless');
+    }
+
+    /**
+     * Re-verification N8: the rollback removes only the row this request wrote, never another manager's same-code write.
+     */
+    #[Test]
+    public function theRollbackKeepsAnotherManagersSameCodeRow(): void
+    {
+        $inner   = new MemoryStorage([new StoredPermissionSet('in_use', 'Used', null, false, ['summary.view'])]);
+        $theirs  = new StoredPermissionSet('custom', 'Theirs', null, false, ['wiki.manage'], 'other-admin');
+        $storage = new RacingStorage($inner, [new StoredPermissionSet('racer', 'Racer', null, false, [])], [$theirs]);
+        $manager = new PermissionSetManager(Catalogues::registry($storage), Catalogues::catalog(), $storage, 2, null, new StaticUsage());
+        try {
+            $manager->create('custom', 'Mine', null, ['summary.view'], new InMemoryUser('admin', null));
+            self::fail('over the bound');
+        } catch (PermissionSetException $e) {
+            self::assertSame(PermissionSetException::LIMIT, $e->reason);
+        }
+        self::assertSame($theirs, $inner->rows['custom'], "another manager's committed row is kept");
     }
 
     #[Test]
