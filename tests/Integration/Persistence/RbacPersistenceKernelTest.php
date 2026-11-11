@@ -74,6 +74,30 @@ final class RbacPersistenceKernelTest extends KernelTestCase
         self::assertSame($this->manager($kernel, 'rbac'), $doctrine->getManagerForClass(PermissionSetRecord::class));
     }
 
+    public function testOptionNamingTheDefaultManagerOfAFlexHostMapsItThereAndOwnsNothing(): void
+    {
+        $kernel  = $this->bootKernel(['doctrine' => ['entity_manager' => 'default']] + self::defaultConfig(), extensions: ['doctrine' => ['orm' => ['mappings' => self::hostMapping()]]]);
+        $default = $this->manager($kernel, 'default');
+        $this->createSchema($default);
+
+        self::assertSame($default, $this->doctrine($kernel)->getManagerForClass(PermissionSetRecord::class), 'LH-RBAC-L2: no "does not map" error');
+        self::assertFalse($this->container($kernel)->has(OwnEntityManagerSubscriber::class), 'the host default is never the bundle own manager');
+        $this->setManager($kernel)->create('ops', 'Ops', null, ['summary.view']);
+        self::assertSame(1, (int) $default->getConnection()->fetchOne('SELECT COUNT(*) FROM rbac_permission_set'));
+    }
+
+    public function testOptionNamingTheDeclaredHostDefaultOwnsNothing(): void
+    {
+        $orm = ['default_entity_manager' => 'default', 'entity_managers' => [
+            'default' => ['connection' => 'default', 'mappings' => self::hostMapping()],
+            'rbac'    => ['connection' => 'default'],
+        ]];
+        $kernel = $this->bootKernel(['doctrine' => ['entity_manager' => 'default']] + self::defaultConfig(), extensions: ['doctrine' => ['orm' => $orm]]);
+
+        self::assertSame($this->manager($kernel, 'default'), $this->doctrine($kernel)->getManagerForClass(PermissionSetRecord::class));
+        self::assertFalse($this->container($kernel)->has(OwnEntityManagerSubscriber::class));
+    }
+
     public function testUnknownEntityManagerFailsTheBuild(): void
     {
         $this->expectException(InvalidConfigurationException::class);

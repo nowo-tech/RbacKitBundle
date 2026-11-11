@@ -16,6 +16,7 @@ use Nowo\RbacKitBundle\Coverage\PermissionCoverage;
 use Nowo\RbacKitBundle\Doctrine\TablePrefixListener;
 use Nowo\RbacKitBundle\EventListener\PermissionRequestListener;
 use Nowo\RbacKitBundle\EventListener\RbacAdminAccessListener;
+use Nowo\RbacKitBundle\EventListener\RbacMemoResetListener;
 use Nowo\RbacKitBundle\Form\PermissionSetType;
 use Nowo\RbacKitBundle\Grant\GrantProviderInterface;
 use Nowo\RbacKitBundle\Grant\GrantResolver;
@@ -104,6 +105,9 @@ final class NowoRbacKitExtension extends Extension implements PrependExtensionIn
             // fails on an undeclared manager.
             $entityManager = $this->rawEntityManager($container);
             if ($entityManager === null) {
+                $container->prependExtensionConfig('doctrine', ['orm' => $mappings]);
+            } elseif ($entityManager === 'default' && !$this->hostDeclaresEntityManagers($container)) {
+                // LH-RBAC-L2: Flex shorthand (no entity_managers): its single manager is "default".
                 $container->prependExtensionConfig('doctrine', ['orm' => $mappings]);
             } elseif (($hostDefault = $this->hostDefaultEntityManager($container, $entityManager)) !== null) {
                 $container->prependExtensionConfig('doctrine', ['orm' => [
@@ -238,6 +242,7 @@ final class NowoRbacKitExtension extends Extension implements PrependExtensionIn
             new Reference('event_dispatcher', ContainerInterface::NULL_ON_INVALID_REFERENCE),
             $this->optional($storage['usage_provider']),
             new Reference('clock', ContainerInterface::NULL_ON_INVALID_REFERENCE),
+            [new Reference(GrantResolver::class), new Reference(PermissionVoter::class)],
         ]))->setPublic(true));
         $container->setAlias(PermissionSetManagerInterface::class, PermissionSetManager::class)->setPublic(true);
 
@@ -283,6 +288,17 @@ final class NowoRbacKitExtension extends Extension implements PrependExtensionIn
             new TaggedIteratorArgument(NowoRbacKitBundle::PERMISSION_GATE_TAG),
             new TaggedIteratorArgument(NowoRbacKitBundle::BYPASS_VETO_TAG),
         ]))->setPublic(true)->addTag('security.voter')->addTag('kernel.reset', ['method' => 'reset']));
+
+        // LH-RBAC-M1: the memos are cleared at every request / message / command boundary, not only on kernel.reset.
+        $memoReset = $container->setDefinition(RbacMemoResetListener::class, new Definition(RbacMemoResetListener::class, [
+            new Reference(PermissionCatalog::class),
+            new Reference(PermissionSetRegistry::class),
+            new Reference(GrantResolver::class),
+            new Reference(PermissionVoter::class),
+        ]));
+        foreach (RbacMemoResetListener::LISTENERS as [$event, $method, $priority]) {
+            $memoReset->addTag('kernel.event_listener', ['event' => $event, 'method' => $method, 'priority' => $priority]);
+        }
 
         $authorization = new Reference('security.authorization_checker', ContainerInterface::NULL_ON_INVALID_REFERENCE);
         $container->setDefinition(PermissionChecker::class, (new Definition(PermissionChecker::class, [new Reference(PermissionCatalog::class), $authorization]))->setPublic(true));
@@ -449,6 +465,21 @@ final class NowoRbacKitExtension extends Extension implements PrependExtensionIn
         }
 
         return $name;
+    }
+
+    /**
+     * Whether the host declares `doctrine.orm.entity_managers` (else it uses the single-manager shorthand).
+     */
+    private function hostDeclaresEntityManagers(ContainerBuilder $container): bool
+    {
+        foreach ($container->getExtensionConfig('doctrine') as $config) {
+            $orm = is_array($config['orm'] ?? null) ? $config['orm'] : [];
+            if (is_array($orm['entity_managers'] ?? null) && $orm['entity_managers'] !== []) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

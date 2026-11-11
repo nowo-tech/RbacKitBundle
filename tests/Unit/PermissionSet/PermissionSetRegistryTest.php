@@ -106,10 +106,20 @@ final class PermissionSetRegistryTest extends TestCase
         $storage->delete('custom');
         $registry->invalidate();
         self::assertNull($registry->find('custom'));
-        self::assertSame(2, $storage->loads);
+        self::assertNull($registry->find('custom'));
+        self::assertSame(3, $storage->loads, 'after a write: read from the storage, not memoised (LH-RBAC-L1)');
+        self::assertSame([], $registry->keysOf('custom'));
+        self::assertFalse($cache->hasItem(PermissionSetRegistry::CACHE_KEY), 'and not written to the cache');
 
         $storage->save(new StoredPermissionSet('custom', 'Custom', null, false, ['summary.view']));
         $registry->invalidate();
+        $cache->get(PermissionSetRegistry::CACHE_KEY, static fn (): string => 'stale');
+        $registry->reset(); // end of the unit: the cache entry is dropped once more
+        self::assertFalse($cache->hasItem(PermissionSetRegistry::CACHE_KEY));
+        self::assertNotNull($registry->find('custom'));
+
+        $registry->reset();
+        $cache->delete(PermissionSetRegistry::CACHE_KEY);
         $cache->get(PermissionSetRegistry::CACHE_KEY, static fn (): string => 'corrupted');
         self::assertNull($registry->find('custom'), 'a corrupted entry grants nothing');
     }

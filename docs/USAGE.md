@@ -346,7 +346,9 @@ permission_set:
 
 ## FrankenPHP worker mode
 
-`PermissionCatalog`, `PermissionSetRegistry`, `GrantResolver` and `PermissionVoter` memoise per request and implement
-`ResetInterface` (`kernel.reset`): nothing about a user survives the request. Every other service is stateless. The
+`PermissionCatalog`, `PermissionSetRegistry`, `GrantResolver` and `PermissionVoter` memoise per request. Since 1.1
+`RbacMemoResetListener` clears them at the start of every main request and Messenger message and at the end of every
+request, message and command (they also implement `ResetInterface` for `kernel.reset`), and a permission-set write
+drops them at once: nothing about a user or a set survives the request, even with kernel reset off. Every other service is stateless. The
 admin access guard trusts a token only when a firewall matched the current main request. Verified by PHPStan FrankenPHP
 rulesets and Igor (see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md)).

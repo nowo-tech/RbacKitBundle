@@ -24,7 +24,11 @@ are DBAL statements on its connection).
   mappings needed), keep `default_entity_manager` on your own default, and create or migrate `rbac_permission_set`
   on its connection. An undeclared name fails the container build.
 - When your code wraps an edit in its own transaction, the row now follows that transaction (SAVEPOINT); the event is
-  dispatched when the manager call returns, i.e. before your commit.
+  dispatched when the manager call returns, i.e. before your commit. If you roll back, the permissions are not kept:
+  the registry is not memoised nor cached after a write, and the cache entry is dropped again at the end of the
+  request / message / command.
+- Worker mode: the authorization memos are now cleared at every request / message / command boundary by the bundle
+  itself (no reliance on `kernel.reset`). Nothing to change.
 
 ## To 1.0.0
 
