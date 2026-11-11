@@ -5,7 +5,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-Target 1.1.0 (architecture bar W1: standard Symfony and DDD hosts, rules 1, 4 and 6).
+## [1.1.0] - 2026-11-11
+
+Security: authorization memos are cleared at every request, message and command boundary, so a revoked permission is refused in kept-alive workers (GHSA); permission-set writes use DBAL and never flush the host's entity manager. See [UPGRADING](https://github.com/nowo-tech/RbacKitBundle/blob/v1.1.0/docs/UPGRADING.md#to-110).
+
 
 ### Fixed
 

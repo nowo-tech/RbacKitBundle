@@ -3,7 +3,7 @@
 ## Table of contents
 
 - [Unreleased](#unreleased)
-  - [To 1.1.0](#to-110)
+- [To 1.1.0](#to-110)
 - [To 1.0.0](#to-100)
   - [Requirements](#requirements)
   - [Adopting the kit from an in-app permission layer](#adopting-the-kit-from-an-in-app-permission-layer)
@@ -13,7 +13,7 @@
 
 ## Unreleased
 
-### To 1.1.0
+## To 1.1.0
 
 Standard hosts: **no configuration change**. Permission-set edits no longer flush your default entity manager (they
 are DBAL statements on its connection).
