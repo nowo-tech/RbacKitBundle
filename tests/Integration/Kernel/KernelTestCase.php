@@ -100,7 +100,8 @@ abstract class KernelTestCase extends TestCase
             self::assertInstanceOf(ManagerRegistry::class, $doctrine);
             $entityManager = $doctrine->getManager();
             if ($entityManager instanceof EntityManagerInterface) {
-                (new SchemaTool($entityManager))->createSchema($entityManager->getMetadataFactory()->getAllMetadata());
+                // updateSchema: two kernels may share one database (worker tests).
+                (new SchemaTool($entityManager))->updateSchema($entityManager->getMetadataFactory()->getAllMetadata());
             }
         }
 

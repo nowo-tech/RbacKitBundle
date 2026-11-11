@@ -9,6 +9,7 @@ use Nowo\RbacKitBundle\Permission\PermissionCatalog;
 use Psr\Clock\ClockInterface;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Contracts\Service\ResetInterface;
 
 use function array_diff;
 use function array_filter;
@@ -30,7 +31,7 @@ use function trim;
  * is validated against the catalogue, bounded by `storage.max_sets`, refreshes the {@see PermissionSetRegistry} and
  * dispatches a {@see PermissionSetChangedEvent}. Stateless.
  */
-final readonly class PermissionSetManager
+final readonly class PermissionSetManager implements PermissionSetManagerInterface
 {
     /** Accepted set codes (no `/`: the admin CSRF token ids use it as separator). */
     public const CODE_PATTERN = '/^[a-z][a-z0-9_]{1,39}$/';
@@ -43,6 +44,7 @@ final readonly class PermissionSetManager
 
     /**
      * @param int $maxSets `storage.max_sets`
+     * @param list<ResetInterface> $decisionMemos memos built on the sets (grant resolver, voter), cleared after every write
      */
     public function __construct(
         private PermissionSetRegistry $registry,
@@ -52,6 +54,7 @@ final readonly class PermissionSetManager
         private ?EventDispatcherInterface $events = null,
         private ?PermissionSetUsageInterface $usage = null,
         private ?ClockInterface $clock = null,
+        private array $decisionMemos = [],
     ) {
     }
 
@@ -142,8 +145,8 @@ final readonly class PermissionSetManager
         }
 
         $this->storage->delete($code);
-        $this->registry->invalidate();
-        $this->events?->dispatch(new PermissionSetChangedEvent(PermissionSetChangedEvent::DELETED, $code, ['name' => $set->name, 'permissions' => count($set->permissions)], $actor));
+        $this->invalidate();
+        $this->events?->dispatch(new PermissionSetChangedEvent(PermissionSetChangedEvent::DELETED, $code, ['name' => $set->name, 'permissions' => count($set->permissions)], $actor, $this->actorId($actor)));
     }
 
     /**
@@ -151,9 +154,9 @@ final readonly class PermissionSetManager
      */
     private function changed(string $action, string $code, array $context, ?object $actor): PermissionSet
     {
-        $this->registry->invalidate();
+        $this->invalidate();
         $set = $this->registry->find($code) ?? throw PermissionSetException::of(PermissionSetException::NOT_FOUND);
-        $this->events?->dispatch(new PermissionSetChangedEvent($action, $code, ['name' => $set->name] + $context, $actor));
+        $this->events?->dispatch(new PermissionSetChangedEvent($action, $code, ['name' => $set->name] + $context, $actor, $this->actorId($actor)));
 
         return $set;
     }
@@ -186,9 +189,21 @@ final readonly class PermissionSetManager
                 $this->storage->delete($saved->code);
             }
         }
-        $this->registry->invalidate();
+        $this->invalidate();
 
         throw PermissionSetException::of(PermissionSetException::LIMIT);
+    }
+
+    /**
+     * After a write: the registry stops memoising and caching until the end of the unit (LH-RBAC-L1), and the
+     * decisions memoised on the old sets are dropped (LH-RBAC-M1).
+     */
+    private function invalidate(): void
+    {
+        $this->registry->invalidate();
+        foreach ($this->decisionMemos as $memo) {
+            $memo->reset();
+        }
     }
 
     /**

@@ -100,6 +100,7 @@ final class AdminUiTest extends KernelTestCase
         self::assertSame([PermissionSetChangedEvent::CREATED, PermissionSetChangedEvent::UPDATED, PermissionSetChangedEvent::DELETED], array_map(static fn (PermissionSetChangedEvent $e): string => $e->action, $events));
         self::assertInstanceOf(UserInterface::class, $events[0]->user);
         self::assertSame('admin', $events[0]->user->getUserIdentifier());
+        self::assertSame(['admin', 'admin', 'admin'], array_map(static fn (PermissionSetChangedEvent $e): ?string => $e->actorId, $events), 'rule 4: the identifier, not only the user object');
         self::assertSame(['project.view'], $events[1]->context['removed']);
     }
 

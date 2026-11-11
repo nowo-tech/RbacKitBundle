@@ -24,13 +24,16 @@ final readonly class PermissionSetChangedEvent
      * @param string $action one of the class constants
      * @param string $code set code
      * @param array<string, mixed> $context name, permissions count, added / removed keys
-     * @param object|null $user authenticated user of the request (null from the CLI or with allow_unauthenticated)
+     * @param object|null $user authenticated user of the request (null from the CLI or with allow_unauthenticated);
+     *                          prefer $actorId (1.1), the object stays for standard hosts and is deprecated (removed in 2.0)
+     * @param string|null $actorId `getUserIdentifier()` of that user, the value stored as `updated_by` (1.1, rule 4)
      */
     public function __construct(
         public string $action,
         public string $code,
         public array $context = [],
         public ?object $user = null,
+        public ?string $actorId = null,
     ) {
     }
 }

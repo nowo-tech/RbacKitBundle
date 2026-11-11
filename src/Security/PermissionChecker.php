@@ -15,7 +15,7 @@ use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
  * A context key asked without a context is refused (a caller that forgets the context fails closed); an uncatalogued
  * key, alias or a missing Security component is refused too. Stateless: the voter memoises.
  */
-final readonly class PermissionChecker
+final readonly class PermissionChecker implements PermissionCheckerInterface
 {
     /**
      * @param AuthorizationCheckerInterface|null $authorization Symfony authorization checker (null = SecurityBundle missing: deny)

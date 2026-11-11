@@ -15,6 +15,7 @@
 - [Coverage check](#coverage-check)
 - [Admin UI](#admin-ui)
 - [Audit events](#audit-events)
+- [Standard Symfony and DDD / hexagonal hosts](#standard-symfony-and-ddd--hexagonal-hosts)
 - [Overriding templates](#overriding-templates)
   - [Override vs upgrade](#override-vs-upgrade)
   - [Procedure](#procedure)
@@ -246,7 +247,7 @@ menu with `path('nowo_rbac_kit_permission_sets')` (`RbacRoutes::PERMISSION_SETS`
 ## Audit events
 
 Every create, update and delete dispatches `PermissionSetChangedEvent` (action, code, context — name, permission count,
-added / removed keys — and the user):
+added / removed keys — and the user identifier `actorId`; `user`, the object, is deprecated):
 
 ```php
 #[AsEventListener]
@@ -254,10 +255,40 @@ final class AuditPermissionSets
 {
     public function __invoke(PermissionSetChangedEvent $event): void
     {
-        // $this->audit->record('permission_set.' . $event->action, $event->user, $event->context + ['code' => $event->code]);
+        // $this->audit->record('permission_set.' . $event->action, $event->actorId, $event->context + ['code' => $event->code]);
     }
 }
 ```
+
+## Standard Symfony and DDD / hexagonal hosts
+
+Both paths are supported (1.1); the standard one is the zero-config default.
+
+- **Standard host:** `RbacContextInterface` on your entities, `PermissionChecker` / `is_granted('permission:…')`, the
+  admin UI on `storage.type: doctrine`. Edits are DBAL statements on your default manager's connection: they never
+  flush it, so your own pending changes are not committed by an edit.
+- **DDD / hexagonal host:** keep the domain free of the bundle: resolve contexts with a `ContextResolverInterface`
+  (string ids, no interface on your entities), feed grants through `GrantProviderInterface`, depend on
+  `PermissionCheckerInterface` / `PermissionSetManagerInterface`, audit with `actorId`, and keep the record off your
+  domain manager:
+
+  ```yaml
+  doctrine:
+      orm:
+          default_entity_manager: default
+          entity_managers:
+              default: { connection: default, mappings: { App: { type: xml, dir: '%kernel.project_dir%/config/doctrine', prefix: 'App\\Domain' } } }
+              rbac: { connection: default }   # same or another connection
+  nowo_rbac_kit:
+      storage: { type: doctrine }
+      doctrine: { entity_manager: rbac }
+  ```
+
+  `PermissionSetRecord` is then mapped on `rbac` only (also off an `auto_mapping` default) and the bundle clears that
+  manager at the end of every request, message and command; your managers are never flushed, cleared or reset.
+  `storage.type: service` remains the fully custom path (your own `PermissionSetStorageInterface`).
+- `BypassVetoInterface` and `RequestContextResolverInterface` take Symfony security / HTTP types on purpose: they are
+  adapter-layer SPIs, not domain ports.
 
 ## Overriding templates
 
@@ -315,7 +346,9 @@ permission_set:
 
 ## FrankenPHP worker mode
 
-`PermissionCatalog`, `PermissionSetRegistry`, `GrantResolver` and `PermissionVoter` memoise per request and implement
-`ResetInterface` (`kernel.reset`): nothing about a user survives the request. Every other service is stateless. The
+`PermissionCatalog`, `PermissionSetRegistry`, `GrantResolver` and `PermissionVoter` memoise per request. Since 1.1
+`RbacMemoResetListener` clears them at the start of every main request and Messenger message and at the end of every
+request, message and command (they also implement `ResetInterface` for `kernel.reset`), and a permission-set write
+drops them at once: nothing about a user or a set survives the request, even with kernel reset off. Every other service is stateless. The
 admin access guard trusts a token only when a firewall matched the current main request. Verified by PHPStan FrankenPHP
 rulesets and Igor (see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md)).

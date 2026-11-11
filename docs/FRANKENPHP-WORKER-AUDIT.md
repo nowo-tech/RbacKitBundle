@@ -54,8 +54,13 @@ evaluated:
 
 ## Findings
 
-No worker-mode finding under scenario **A**. Under scenario **B** nothing leaks between users, but permission changes
-would be seen late (bounded memos): keep `kernel.reset` (the default of the Symfony and FrankenPHP runtimes).
+No worker-mode finding under scenario **A**. Under scenario **B** (kernel reset off), before 1.1 permission changes and
+a user's assignments were seen only after the worker restarted (LH-RBAC-M1, authorization). Since 1.1
+`RbacMemoResetListener` clears the four memos at the start of every main request / Messenger message and at the end of
+every request, message and command, and a permission-set write drops them at once. Proven by
+`RbacWorkerMemoTest` (two kept-alive kernels on one database driven through `http_kernel`: a permission revoked on
+worker A is refused by worker B on its next request; 200 requests with flat memory; a rolled-back edit is not
+memoised).
 
 ## Usage recommendations in worker mode
 

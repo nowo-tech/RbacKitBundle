@@ -49,6 +49,14 @@ final class PermissionSetRegistry implements ResetInterface
     private array $keySets = [];
 
     /**
+     * A set was written in this unit (request / message / command): until its end the rows are read from the storage
+     * on every call, neither memoised nor written to the cache, so a write the host rolls back never stays in the
+     * memo or the shared cache pool (LH-RBAC-L1). The end of the unit drops the cache entry once more.
+     */
+    // @igor-ignore - Per-unit flag, cleared by reset() at every request / message / command boundary and kernel.reset.
+    private bool $written = false;
+
+    /**
      * @param array<string, array{label: string|null, description: string|null, permissions: list<string>, all: bool, include_global?: bool, except: list<string>, locked: bool}> $systemSets configured sets
      * @param int $maxSets upper bound of stored rows (`storage.max_sets`); more rows in the storage is an error
      * @param int $cacheTtl seconds the cache entry lives (`storage.cache_ttl`)
@@ -65,21 +73,29 @@ final class PermissionSetRegistry implements ResetInterface
     }
 
     /**
-     * Forgets the per-request memo (kernel.reset, worker mode).
+     * Forgets the per-request memo (every request / message / command boundary and kernel.reset, worker mode); after
+     * a write in this unit, also drops the cache entry again (its transaction has ended by now).
      */
     public function reset(): void
     {
+        if ($this->written) {
+            $this->cache?->delete(self::CACHE_KEY);
+        }
+
         $this->sets    = null;
         $this->keySets = [];
+        $this->written = false;
     }
 
     /**
-     * Drops the cache entry and the memo after a change.
+     * Drops the cache entry and the memo after a change; until the end of the unit nothing is memoised or cached.
      */
     public function invalidate(): void
     {
         $this->cache?->delete(self::CACHE_KEY);
-        $this->reset();
+        $this->sets    = null;
+        $this->keySets = [];
+        $this->written = true;
     }
 
     /**
@@ -130,7 +146,11 @@ final class PermissionSetRegistry implements ResetInterface
             $this->logger?->warning('RbacKit: permission sets reference keys that are not catalogued; they grant nothing.', ['sets' => array_map(static fn (array $keys): string => implode(', ', $keys), $unknown)]);
         }
 
-        // @igor-ignore - Per-request memo, cleared by reset() (kernel.reset).
+        if ($this->written) {
+            return $sets + $custom;
+        }
+
+        // @igor-ignore - Per-request memo, cleared by reset() at every boundary (RbacMemoReset) and kernel.reset.
         return $this->sets = $sets + $custom;
     }
 
@@ -149,8 +169,12 @@ final class PermissionSetRegistry implements ResetInterface
      */
     public function keysOf(string $code): array
     {
+        if ($this->written) {
+            return array_fill_keys($this->find($code)->permissions ?? [], true);
+        }
+
         if (!isset($this->keySets[$code])) {
-            // @igor-ignore - Per-request memo, cleared by reset() (kernel.reset).
+            // @igor-ignore - Per-request memo, cleared by reset() at every boundary (RbacMemoReset) and kernel.reset.
             $this->keySets[$code] = array_fill_keys($this->find($code)->permissions ?? [], true);
         }
 
@@ -178,7 +202,7 @@ final class PermissionSetRegistry implements ResetInterface
      */
     private function rows(): array
     {
-        if (!$this->cache instanceof CacheInterface) {
+        if (!$this->cache instanceof CacheInterface || $this->written) {
             return $this->load();
         }
 

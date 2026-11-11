@@ -3,6 +3,7 @@
 ## Table of contents
 
 - [Unreleased](#unreleased)
+  - [To 1.1.0](#to-110)
 - [To 1.0.0](#to-100)
   - [Requirements](#requirements)
   - [Adopting the kit from an in-app permission layer](#adopting-the-kit-from-an-in-app-permission-layer)
@@ -11,6 +12,23 @@
   - [From the audited candidate 8bd695a](#from-the-audited-candidate-8bd695a)
 
 ## Unreleased
+
+### To 1.1.0
+
+Standard hosts: **no configuration change**. Permission-set edits no longer flush your default entity manager (they
+are DBAL statements on its connection).
+
+- Audit listeners: prefer `$event->actorId` over `$event->user` (deprecated, removed in 2.0).
+- Type-hint `PermissionCheckerInterface` / `PermissionSetManagerInterface` instead of the final classes (optional).
+- New optional `doctrine.entity_manager: <name>`: declare that manager under `doctrine.orm.entity_managers` (no
+  mappings needed), keep `default_entity_manager` on your own default, and create or migrate `rbac_permission_set`
+  on its connection. An undeclared name fails the container build.
+- When your code wraps an edit in its own transaction, the row now follows that transaction (SAVEPOINT); the event is
+  dispatched when the manager call returns, i.e. before your commit. If you roll back, the permissions are not kept:
+  the registry is not memoised nor cached after a write, and the cache entry is dropped again at the end of the
+  request / message / command.
+- Worker mode: the authorization memos are now cleared at every request / message / command boundary by the bundle
+  itself (no reliance on `kernel.reset`). Nothing to change.
 
 ## To 1.0.0
 
