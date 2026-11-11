@@ -5,6 +5,27 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+Target 1.1.0 (architecture bar W1: standard Symfony and DDD hosts, rules 1, 4 and 6).
+
+### Fixed
+
+- Rule 6: `storage.type: doctrine` flushed the entity manager that maps `PermissionSetRecord` (the host's default one)
+  on every save and delete, committing whatever the host had left pending in it. Writes are now single DBAL
+  statements built from the entity metadata (insert / update by code, delete by code), inside a SAVEPOINT when a
+  transaction is open (the original error is rethrown if the write fails); reads re-hydrate the records
+  (`HINT_REFRESH`). Affected: 1.0.0.
+
+### Added
+
+- `doctrine.entity_manager` (default `null`): map `PermissionSetRecord` on a dedicated entity manager only
+  (`RbacEntityManagerPass`, also off an `auto_mapping: true` default); the host's `default_entity_manager` stays the
+  host's, an undeclared manager fails the build, and the bundle clears that manager at the end of every request,
+  message and command (`OwnEntityManagerSubscriber`).
+- `PermissionSetChangedEvent::$actorId` (rule 4: the user identifier, the value stored as `updated_by`). `$user` stays
+  for standard hosts and is deprecated (removed in 2.0).
+- `PermissionCheckerInterface` and `PermissionSetManagerInterface` (rule 1), aliased to the services.
+- CI job running the storage tests on MySQL 8.4 and PostgreSQL 17 (plus SQLite).
+
 ## [1.0.0] - 2026-11-02
 
 First release: permission catalogue, permission sets, typed contexts, memoised voter and admin UI (REQ-SEC-004 Appendix CI fixes included).

@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Nowo\RbacKitBundle;
 
 use Nowo\RbacKitBundle\DependencyInjection\Compiler\CsrfProtectionPass;
+use Nowo\RbacKitBundle\DependencyInjection\Compiler\RbacEntityManagerPass;
 use Nowo\RbacKitBundle\DependencyInjection\Compiler\TwigPathsPass;
 use Nowo\RbacKitBundle\DependencyInjection\Compiler\UnauthenticatedAccessPass;
 use Nowo\RbacKitBundle\DependencyInjection\NowoRbacKitExtension;
+use Symfony\Component\DependencyInjection\Compiler\PassConfig;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Extension\ExtensionInterface;
 use Symfony\Component\HttpKernel\Bundle\Bundle;
@@ -46,6 +48,9 @@ final class NowoRbacKitBundle extends Bundle
         $container->addCompilerPass(new TwigPathsPass());
         $container->addCompilerPass(new CsrfProtectionPass());
         $container->addCompilerPass(new UnauthenticatedAccessPass());
+        // 1.1: doctrine.entity_manager is real (fail fast, then the mapping on that manager only).
+        $container->addCompilerPass(new RbacEntityManagerPass(checkOnly: true), PassConfig::TYPE_BEFORE_OPTIMIZATION, 10);
+        $container->addCompilerPass(new RbacEntityManagerPass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, -10);
     }
 
     /**

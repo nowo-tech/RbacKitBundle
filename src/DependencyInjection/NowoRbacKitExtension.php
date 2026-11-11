@@ -28,6 +28,7 @@ use Nowo\RbacKitBundle\Permission\PermissionProviderInterface;
 use Nowo\RbacKitBundle\PermissionSet\ConfigPermissionSetStorage;
 use Nowo\RbacKitBundle\PermissionSet\DoctrinePermissionSetStorage;
 use Nowo\RbacKitBundle\PermissionSet\PermissionSetManager;
+use Nowo\RbacKitBundle\PermissionSet\PermissionSetManagerInterface;
 use Nowo\RbacKitBundle\PermissionSet\PermissionSetRegistry;
 use Nowo\RbacKitBundle\PermissionSet\PermissionSetStorageInterface;
 use Nowo\RbacKitBundle\Routing\RbacRouteLoader;
@@ -36,6 +37,7 @@ use Nowo\RbacKitBundle\Security\AllowAllRbacAdminAccessChecker;
 use Nowo\RbacKitBundle\Security\BypassVetoInterface;
 use Nowo\RbacKitBundle\Security\ConfigurableRbacAdminAccessChecker;
 use Nowo\RbacKitBundle\Security\PermissionChecker;
+use Nowo\RbacKitBundle\Security\PermissionCheckerInterface;
 use Nowo\RbacKitBundle\Security\PermissionGateInterface;
 use Nowo\RbacKitBundle\Security\PermissionVoter;
 use Nowo\RbacKitBundle\Security\RbacAdminAccessCheckerInterface;
@@ -54,6 +56,7 @@ use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\HttpKernel\KernelEvents;
 
 use function array_key_exists;
+use function array_key_first;
 use function interface_exists;
 use function is_array;
 use function is_bool;
@@ -68,6 +71,9 @@ use function sprintf;
  */
 final class NowoRbacKitExtension extends Extension implements PrependExtensionInterface
 {
+    /** Container parameter holding `doctrine.entity_manager` (storage.type: doctrine; null: the default manager). */
+    public const ENTITY_MANAGER_PARAMETER = 'nowo_rbac_kit.doctrine.entity_manager';
+
     /**
      * `nowo_rbac_kit`.
      */
@@ -82,19 +88,29 @@ final class NowoRbacKitExtension extends Extension implements PrependExtensionIn
     public function prepend(ContainerBuilder $container): void
     {
         if ($this->rawStorageType($container) === 'doctrine' && $container->hasExtension('doctrine')) {
-            $container->prependExtensionConfig('doctrine', [
-                'orm' => [
-                    'mappings' => [
-                        'NowoRbacKitBundle' => [
-                            'type'      => 'attribute',
-                            'dir'       => __DIR__ . '/../Entity',
-                            'prefix'    => 'Nowo\RbacKitBundle\Entity',
-                            'alias'     => 'NowoRbacKit',
-                            'is_bundle' => false,
-                        ],
+            $mappings = [
+                'mappings' => [
+                    'NowoRbacKitBundle' => [
+                        'type'      => 'attribute',
+                        'dir'       => __DIR__ . '/../Entity',
+                        'prefix'    => 'Nowo\RbacKitBundle\Entity',
+                        'alias'     => 'NowoRbacKit',
+                        'is_bundle' => false,
                     ],
                 ],
-            ]);
+            ];
+            // 1.1: on doctrine.entity_manager when the host declares it (pinning the host's own default so the
+            // prepended entry never becomes the default manager); RbacEntityManagerPass keeps it there only and
+            // fails on an undeclared manager.
+            $entityManager = $this->rawEntityManager($container);
+            if ($entityManager === null) {
+                $container->prependExtensionConfig('doctrine', ['orm' => $mappings]);
+            } elseif (($hostDefault = $this->hostDefaultEntityManager($container, $entityManager)) !== null) {
+                $container->prependExtensionConfig('doctrine', ['orm' => [
+                    'default_entity_manager' => $hostDefault,
+                    'entity_managers'        => [$entityManager => $mappings],
+                ]]);
+            }
         }
 
         $this->prependFormKitProfile($container);
@@ -184,7 +200,7 @@ final class NowoRbacKitExtension extends Extension implements PrependExtensionIn
      */
     private function registerSets(ContainerBuilder $container, array $config): void
     {
-        /** @var array{permission_sets: array<string, mixed>, voter: array{max_assignments: int}, grant_provider: string|null, storage: array{type: string, service: string|null, cache_pool: string|null, cache_ttl: int, max_sets: int, usage_provider: string|null}, doctrine: array{table_prefix: string}} $config */
+        /** @var array{permission_sets: array<string, mixed>, voter: array{max_assignments: int}, grant_provider: string|null, storage: array{type: string, service: string|null, cache_pool: string|null, cache_ttl: int, max_sets: int, usage_provider: string|null}, doctrine: array{table_prefix: string, entity_manager: string|null}} $config */
         $storage = $config['storage'];
         if ($storage['type'] === 'doctrine') {
             self::requirePackage(EntityManagerInterface::class, 'storage.type: doctrine', 'doctrine/doctrine-bundle doctrine/orm');
@@ -195,6 +211,7 @@ final class NowoRbacKitExtension extends Extension implements PrependExtensionIn
             $container->setDefinition(TablePrefixListener::class, (new Definition(TablePrefixListener::class, [$config['doctrine']['table_prefix']]))
                 ->addTag('doctrine.event_listener', ['event' => 'loadClassMetadata']));
             $container->setAlias(PermissionSetStorageInterface::class, DoctrinePermissionSetStorage::class)->setPublic(true);
+            $container->setParameter(self::ENTITY_MANAGER_PARAMETER, $config['doctrine']['entity_manager']);
         } elseif ($storage['type'] === 'service') {
             $container->setAlias(PermissionSetStorageInterface::class, (string) $storage['service'])->setPublic(true);
         } else {
@@ -222,6 +239,7 @@ final class NowoRbacKitExtension extends Extension implements PrependExtensionIn
             $this->optional($storage['usage_provider']),
             new Reference('clock', ContainerInterface::NULL_ON_INVALID_REFERENCE),
         ]))->setPublic(true));
+        $container->setAlias(PermissionSetManagerInterface::class, PermissionSetManager::class)->setPublic(true);
 
         if (is_string($config['grant_provider']) && $config['grant_provider'] !== '') {
             $container->setAlias(GrantProviderInterface::class, $config['grant_provider'])->setPublic(true);
@@ -268,6 +286,7 @@ final class NowoRbacKitExtension extends Extension implements PrependExtensionIn
 
         $authorization = new Reference('security.authorization_checker', ContainerInterface::NULL_ON_INVALID_REFERENCE);
         $container->setDefinition(PermissionChecker::class, (new Definition(PermissionChecker::class, [new Reference(PermissionCatalog::class), $authorization]))->setPublic(true));
+        $container->setAlias(PermissionCheckerInterface::class, PermissionChecker::class)->setPublic(true);
         $container->setDefinition(RbacTwigExtension::class, (new Definition(RbacTwigExtension::class, [new Reference(PermissionChecker::class)]))->addTag('twig.extension'));
 
         $container->setDefinition(PermissionCoverage::class, (new Definition(PermissionCoverage::class, [
@@ -416,6 +435,46 @@ final class NowoRbacKitExtension extends Extension implements PrependExtensionIn
     /**
      * `storage.type` from the raw configuration (default `config`).
      */
+    /**
+     * `doctrine.entity_manager` from the raw configs (prepend runs before the configuration is processed).
+     */
+    private function rawEntityManager(ContainerBuilder $container): ?string
+    {
+        $name = null;
+        foreach ($container->getExtensionConfig(Configuration::ALIAS) as $config) {
+            if (isset($config['doctrine']) && is_array($config['doctrine']) && array_key_exists('entity_manager', $config['doctrine'])) {
+                $value = $config['doctrine']['entity_manager'];
+                $name  = is_string($value) && $value !== '' ? $value : null;
+            }
+        }
+
+        return $name;
+    }
+
+    /**
+     * The host's default entity manager (its `default_entity_manager`, else the first declared one) when the host
+     * declares `$name` under `doctrine.orm.entity_managers`; null otherwise.
+     */
+    private function hostDefaultEntityManager(ContainerBuilder $container, string $name): ?string
+    {
+        $declared = false;
+        $default  = null;
+        $first    = null;
+        foreach ($container->getExtensionConfig('doctrine') as $config) {
+            $orm = is_array($config['orm'] ?? null) ? $config['orm'] : [];
+            if (is_string($orm['default_entity_manager'] ?? null)) {
+                $default = $orm['default_entity_manager'];
+            }
+            $managers = $orm['entity_managers'] ?? null;
+            if (is_array($managers) && $managers !== []) {
+                $first ??= (string) array_key_first($managers);
+                $declared = $declared || isset($managers[$name]);
+            }
+        }
+
+        return $declared ? ($default ?? $first) : null;
+    }
+
     private function rawStorageType(ContainerBuilder $container): string
     {
         $type = 'config';

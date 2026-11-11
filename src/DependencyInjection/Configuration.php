@@ -245,6 +245,14 @@ final class Configuration implements ConfigurationInterface
                         ->thenInvalid('nowo_rbac_kit.doctrine.table_prefix must contain only letters, digits and underscores, got %s.')
                     ->end()
                 ->end()
+                ->scalarNode('entity_manager')
+                    ->info('Doctrine entity manager that maps the bundle entity (storage.type: doctrine, 1.1). Null (default): the default manager. When set, the entity is mapped on that manager ONLY (removed from the others, auto_mapping included), every read and write uses it, the bundle clears it at the end of each request / message / command, and the build fails when it is not declared. Writes are DBAL statements: no manager is ever flushed.')
+                    ->defaultNull()
+                    ->validate()
+                        ->ifTrue(static fn (mixed $v): bool => $v !== null && (!is_string($v) || preg_match('/^\w+$/', $v) !== 1))
+                        ->thenInvalid('nowo_rbac_kit.doctrine.entity_manager must be an entity manager name or null, got %s.')
+                    ->end()
+                ->end()
             ->end();
     }
 

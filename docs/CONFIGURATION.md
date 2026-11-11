@@ -66,6 +66,7 @@ nowo_rbac_kit:
         usage_provider: ~                 # PermissionSetUsageInterface service id; needed to delete custom sets
     doctrine:
         table_prefix: ''                  # letters, digits, underscores (REQ-ORM-002)
+        entity_manager: ~                 # 1.1: dedicated manager of PermissionSetRecord (null: default manager)
     request_guard:
         enabled: false                    # 403 before the controller on a catalogued route without its key
         context_resolver: ~               # RequestContextResolverInterface service id (the context of a request)
@@ -149,7 +150,7 @@ refused by the voter, and `Assignment` throws on one.
 | Type | Behaviour |
 | --- | --- |
 | `config` (default) | Read-only: only the configured sets; the admin UI lists them without create / edit / delete. |
-| `doctrine` | Entity `PermissionSetRecord`, table `rbac_permission_set` (+ `doctrine.table_prefix`, unique code). Needs `doctrine/orm` and `doctrine/doctrine-bundle`; the mapping is prepended. Create the table with a migration. |
+| `doctrine` | Entity `PermissionSetRecord`, table `rbac_permission_set` (+ `doctrine.table_prefix`, unique code). Needs `doctrine/orm` and `doctrine/doctrine-bundle`; the mapping is prepended (on `doctrine.entity_manager` when set, 1.1: that manager only). Writes are DBAL statements (no `flush()`, SAVEPOINT inside an open transaction). Create the table with a migration. |
 | `service` | Your `PermissionSetStorageInterface` service (`storage.service`). |
 
 The stored rows are read once per request and cached in `cache_pool` (whole table, invalidated after every change on

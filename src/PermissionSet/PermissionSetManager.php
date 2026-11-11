@@ -30,7 +30,7 @@ use function trim;
  * is validated against the catalogue, bounded by `storage.max_sets`, refreshes the {@see PermissionSetRegistry} and
  * dispatches a {@see PermissionSetChangedEvent}. Stateless.
  */
-final readonly class PermissionSetManager
+final readonly class PermissionSetManager implements PermissionSetManagerInterface
 {
     /** Accepted set codes (no `/`: the admin CSRF token ids use it as separator). */
     public const CODE_PATTERN = '/^[a-z][a-z0-9_]{1,39}$/';
@@ -143,7 +143,7 @@ final readonly class PermissionSetManager
 
         $this->storage->delete($code);
         $this->registry->invalidate();
-        $this->events?->dispatch(new PermissionSetChangedEvent(PermissionSetChangedEvent::DELETED, $code, ['name' => $set->name, 'permissions' => count($set->permissions)], $actor));
+        $this->events?->dispatch(new PermissionSetChangedEvent(PermissionSetChangedEvent::DELETED, $code, ['name' => $set->name, 'permissions' => count($set->permissions)], $actor, $this->actorId($actor)));
     }
 
     /**
@@ -153,7 +153,7 @@ final readonly class PermissionSetManager
     {
         $this->registry->invalidate();
         $set = $this->registry->find($code) ?? throw PermissionSetException::of(PermissionSetException::NOT_FOUND);
-        $this->events?->dispatch(new PermissionSetChangedEvent($action, $code, ['name' => $set->name] + $context, $actor));
+        $this->events?->dispatch(new PermissionSetChangedEvent($action, $code, ['name' => $set->name] + $context, $actor, $this->actorId($actor)));
 
         return $set;
     }
