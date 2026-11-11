@@ -10,6 +10,14 @@ All notable changes to this project are documented here. The format follows
 Security: authorization memos are cleared at every request, message and command boundary, so a revoked permission is refused in kept-alive workers (GHSA); permission-set writes use DBAL and never flush the host's entity manager. See [UPGRADING](https://github.com/nowo-tech/RbacKitBundle/blob/v1.1.0/docs/UPGRADING.md#to-110).
 
 
+### Security
+
+- Worker mode (authorization): the permission catalogue, permission-set registry, grant resolver and voter memos were
+  cleared only by `kernel.reset`. A kept-alive worker without the services resetter (FrankenPHP worker mode with kernel
+  reset off) kept granting a revoked permission, and a user's old assignments, until it restarted. `RbacMemoResetListener`
+  now clears them at the start of every main request and Messenger message and at the end of every request, message and
+  command, and every permission-set write also drops the grant and voter memos. Affected: 1.0.0. Advisory: GitHub Security Advisory (Moderate) for >= 1.0.0, < 1.1.0.
+
 ### Fixed
 
 - Rule 6: `storage.type: doctrine` flushed the entity manager that maps `PermissionSetRecord` (the host's default one)
@@ -17,11 +25,6 @@ Security: authorization memos are cleared at every request, message and command 
   statements built from the entity metadata (insert / update by code, delete by code), inside a SAVEPOINT when a
   transaction is open (the original error is rethrown if the write fails); reads re-hydrate the records
   (`HINT_REFRESH`). Affected: 1.0.0.
-- Worker mode (authorization): the permission catalogue, permission-set registry, grant resolver and voter memos were
-  cleared only by `kernel.reset`. A kept-alive worker without the services resetter (FrankenPHP worker mode with kernel
-  reset off) kept granting a revoked permission, and a user's old assignments, until it restarted. `RbacMemoResetListener`
-  now clears them at the start of every main request and Messenger message and at the end of every request, message and
-  command, and every permission-set write also drops the grant and voter memos. Affected: 1.0.0.
 - After a permission-set write the registry reads the storage on every call until the end of the request, message or
   command, without memoising it or writing the cache pool, and drops the cache entry again at that end: an edit the
   host rolls back no longer stays in the memo or, with `cache.app`, in the shared cache for `cache_ttl`.
