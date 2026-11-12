@@ -5,6 +5,43 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+REQ-ARCH-001 rule 3: framework-free twins of the two adapter SPIs that took Symfony types. Permission decisions are
+unchanged (exhaustive equivalence matrix against the 1.1.0 voter). See [UPGRADING](UPGRADING.md#unreleased).
+
+### Added
+
+- `RbacRequestContextResolverInterface::contextOf(RbacRequest)`: the request guard's context resolver without the
+  Symfony `Request`. `RbacRequest` carries the method, route name, scheme and host as properties; the path, scalar
+  route parameters, scalar non-internal attributes and the allowlisted headers are kept in an internal `WeakMap`
+  (never shown by a dump, `var_export()`, `(array)`, `json_encode()` or `serialize()`).
+- `RbacBypassVetoInterface::vetoesBypass(RbacActor, ?object)`: the bypass veto without the Symfony `TokenInterface`.
+  `RbacActor` carries the user identifier, token roles, reachable roles, impersonator and firewall name; the user
+  object and the token attributes are kept in the same internal `WeakMap`.
+- `request_guard.context_headers` (default `[]`): headers copied into the `RbacRequest`. Refused (configuration
+  error): credential, secret and cookie headers; client-IP headers (`x-real-ip`, `true-client-ip`, `cf-connecting-ip`,
+  `fastly-client-ip`, `*client-ip`); proxy and auth-proxy identity headers (`forwarded`, `via`, `x-host`,
+  `remote-user`, `x-ms-client-principal*`, `x-pomerium-claim-*`, `x-user-email`, `dpop`); and the `x-forwarded-*`,
+  `x-original-*`, `x-envoy-*`, `x-ssl-*` and `x-client-*` families. Header values stay client-controlled.
+- `RbacPortsPass`: the configured context resolver and every tagged bypass veto must implement one of their two ports
+  (the build fails otherwise); a service implementing both is called through the new one. No interface alias is
+  registered for these SPIs, so `lint:container` passes for new-only, deprecated-only and dual services (kernel test).
+- Tests: old-vs-new equivalence matrices for the voter (106,920 decisions against a verbatim copy of the 1.1.0 voter,
+  with deny-by-default invariants) and the request guard (8,400 requests against a verbatim copy of the 1.1.0
+  listener and voter); a DDD-host kernel test using only the new
+  ports; `RbacWorkerMemoTest` now alternates alice and bob.
+
+### Deprecated
+
+- `Context\RequestContextResolverInterface` (use `RbacRequestContextResolverInterface`) and
+  `Security\BypassVetoInterface` (use `RbacBypassVetoInterface`), removed in 2.0. A service implementing only the
+  deprecated interface triggers a build-time deprecation and keeps working as in 1.1.
+
+### Changed
+
+- A service tagged `nowo_rbac_kit.bypass_veto` by hand that implements neither veto interface (a duck-typed `vetoes()`
+  method) now fails the container build, or throws at the first decision when its class is unknown at build time
+  (fail closed). Implement `RbacBypassVetoInterface`.
+
 ## [1.1.0] - 2026-11-11
 
 Security: authorization memos are cleared at every request, message and command boundary, so a revoked permission is refused in kept-alive workers (GHSA); permission-set writes use DBAL and never flush the host's entity manager. See [UPGRADING](https://github.com/nowo-tech/RbacKitBundle/blob/v1.1.0/docs/UPGRADING.md#to-110).

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\RbacKitBundle\Tests\Unit\Security;
 
+use ArrayObject;
+use LogicException;
 use Nowo\RbacKitBundle\Context\ContextResolverInterface;
 use Nowo\RbacKitBundle\Context\DefaultContextResolver;
 use Nowo\RbacKitBundle\Grant\GrantResolver;
@@ -14,6 +16,8 @@ use Nowo\RbacKitBundle\PermissionSet\PermissionSetRegistry;
 use Nowo\RbacKitBundle\Security\BypassVetoInterface;
 use Nowo\RbacKitBundle\Security\PermissionGateInterface;
 use Nowo\RbacKitBundle\Security\PermissionVoter;
+use Nowo\RbacKitBundle\Security\RbacActor;
+use Nowo\RbacKitBundle\Security\RbacBypassVetoInterface;
 use Nowo\RbacKitBundle\Tests\Fixtures\MapGrantProvider;
 use Nowo\RbacKitBundle\Tests\Fixtures\Project;
 use Nowo\RbacKitBundle\Tests\Fixtures\ReportRow;
@@ -21,6 +25,7 @@ use Nowo\RbacKitBundle\Tests\Support\Catalogues;
 use Nowo\RbacKitBundle\Tests\Support\MemoryStorage;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use stdClass;
 use Symfony\Component\Security\Core\Authentication\Token\NullToken;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
@@ -351,11 +356,98 @@ final class PermissionVoterTest extends TestCase
     }
 
     /**
+     * 1.2: a framework-free veto suspends the bypass like a deprecated one; a tagged object on neither port fails closed
+     * (throws) instead of being skipped.
+     */
+    #[Test]
+    public function frameworkFreeVetoesSuspendTheBypass(): void
+    {
+        $root = $this->token('root', ['ROLE_SUPER']);
+        $root->setAttribute('view_as_member', true);
+
+        $new = new class implements RbacBypassVetoInterface {
+            public ?RbacActor $seen = null;
+
+            public function vetoesBypass(RbacActor $actor, ?object $subject): bool
+            {
+                $this->seen = $actor;
+
+                return $actor->tokenAttribute('view_as_member') === true;
+            }
+        };
+        $voter = $this->voter(bypassRoles: ['ROLE_SUPER'], vetoes: [$new]);
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($root, new Project('billing'), ['permission:project.view']));
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($this->token('root', ['ROLE_SUPER']), new Project('billing'), ['permission:project.view']));
+        self::assertInstanceOf(RbacActor::class, $new->seen);
+        self::assertSame('root', $new->seen->userIdentifier);
+        self::assertSame(['ROLE_SUPER'], $new->seen->reachableRoles);
+
+        $notAPort = new stdClass();
+        $broken   = $this->voter(bypassRoles: ['ROLE_SUPER'], vetoes: [$notAPort]); // @phpstan-ignore argument.type (a tagged object on neither port)
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('The bypass veto "stdClass" must implement');
+        $broken->vote($root, new Project('billing'), ['permission:project.view']);
+    }
+
+    /**
+     * Audit gap: a mixed list (deprecated port, new port) is asked in order and stops at the first veto, as in 1.1; an
+     * exception thrown by a veto propagates (never read as "no veto").
+     */
+    #[Test]
+    public function mixedVetoListsShortCircuitAndExceptionsPropagate(): void
+    {
+        $calls  = new ArrayObject();
+        $legacy = new class($calls) implements BypassVetoInterface {
+            /** @param ArrayObject<int, string> $calls */
+            public function __construct(private readonly ArrayObject $calls)
+            {
+            }
+
+            public function vetoes(TokenInterface $token, ?object $subject): bool
+            {
+                $this->calls[] = 'legacy';
+
+                return $subject instanceof Project && $subject->id === 'preview';
+            }
+        };
+        $new = new class($calls) implements RbacBypassVetoInterface {
+            /** @param ArrayObject<int, string> $calls */
+            public function __construct(private readonly ArrayObject $calls)
+            {
+            }
+
+            public function vetoesBypass(RbacActor $actor, ?object $subject): bool
+            {
+                $this->calls[] = 'new';
+
+                return $subject instanceof Project && $subject->id === 'staging';
+            }
+        };
+        $voter = $this->voter(bypassRoles: ['ROLE_SUPER'], vetoes: [$legacy, $new]);
+        $root  = $this->token('root', ['ROLE_SUPER']);
+
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($root, new Project('preview'), ['permission:project.view']));
+        self::assertSame(['legacy'], $calls->getArrayCopy(), 'the first veto short-circuits');
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($root, new Project('staging'), ['permission:project.view']));
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($root, new Project('billing'), ['permission:project.view']));
+        self::assertSame(['legacy', 'legacy', 'new', 'legacy', 'new'], $calls->getArrayCopy());
+
+        $throwing = new class implements RbacBypassVetoInterface {
+            public function vetoesBypass(RbacActor $actor, ?object $subject): bool
+            {
+                throw new RuntimeException('veto backend down');
+            }
+        };
+        $this->expectException(RuntimeException::class);
+        $this->voter(bypassRoles: ['ROLE_SUPER'], vetoes: [$throwing])->vote($root, new Project('billing'), ['permission:project.view']);
+    }
+
+    /**
      * @param list<string> $bypassRoles
      * @param array<string, list<string>> $roleGrants
      * @param list<string> $openRoutes
      * @param list<PermissionGateInterface> $gates
-     * @param list<BypassVetoInterface> $vetoes
+     * @param list<BypassVetoInterface|RbacBypassVetoInterface> $vetoes
      * @param array<string, array{label: string|null, description: string|null, permissions: list<string>, all: bool, include_global: bool, except: list<string>, locked: bool}>|null $sets
      */
     private function voter(

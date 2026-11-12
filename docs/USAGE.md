@@ -16,6 +16,9 @@
 - [Admin UI](#admin-ui)
 - [Audit events](#audit-events)
 - [Standard Symfony and DDD / hexagonal hosts](#standard-symfony-and-ddd--hexagonal-hosts)
+  - [Standard host](#standard-host)
+  - [DDD host](#ddd-host)
+  - [Framework-free values (`RbacRequest`, `RbacActor`)](#framework-free-values-rbacrequest-rbacactor)
 - [Overriding templates](#overriding-templates)
   - [Override vs upgrade](#override-vs-upgrade)
   - [Procedure](#procedure)
@@ -161,7 +164,11 @@ final class WikiPermissions implements PermissionProviderInterface
 
 `PermissionGateInterface` services are asked first, for everybody (bypass roles included) — for example "the paying
 account's plan leaves this module out". `BypassVetoInterface` services suspend `voter.bypass_roles` for one decision —
-for example an administrator previewing a project as a member. Both are autoconfigured. Gate answers are memoised per
+for example an administrator previewing a project as a member. Both are autoconfigured. Since 1.2 implement
+`RbacBypassVetoInterface::vetoesBypass(RbacActor $actor, ?object $subject)`: the `RbacActor` carries the user identifier,
+the token roles, the reachable roles (after the hierarchy), the impersonator of a switch-user token, the firewall name,
+the user object (`user()`) and the token attributes (`tokenAttribute()`). The deprecated `BypassVetoInterface`
+(`TokenInterface`) is still asked until 2.0; a service on both ports is asked through the new one. Gate answers are memoised per
 request with the decision (user, roles, key, the subject's typed context id, veto state), so they must not depend on
 mutable request state — call `PermissionVoter::reset()` if it changes; a subject that is not a context is never
 memoised. Vetoes are asked on every decision of a bypass role, so a "view as member" switch toggled mid-request is
@@ -201,8 +208,27 @@ id — grants nothing through aggregation (fail closed): pass the project itself
 ## Request guard
 
 With `request_guard.enabled` a main request to a catalogued route answers 403 before the controller when the key is not
-granted (guests get the firewall's entry point). Implement `RequestContextResolverInterface` to give it the request's
-context (memoise the lookup on the request attributes) and set `request_guard.context_resolver`; users holding no set
+granted (guests get the firewall's entry point). Implement `RbacRequestContextResolverInterface` (1.2) to give it the
+request's context and set `request_guard.context_resolver`:
+
+```php
+use Nowo\RbacKitBundle\Context\RbacRequest;
+use Nowo\RbacKitBundle\Context\RbacRequestContextResolverInterface;
+
+final readonly class ProjectFromRoute implements RbacRequestContextResolverInterface
+{
+    public function __construct(private ProjectRepository $projects) {}
+
+    public function contextOf(RbacRequest $request): ?object
+    {
+        $id = $request->routeParam('projectId');          // also attribute(), header() for request_guard.context_headers
+
+        return is_string($id) ? $this->projects->find($id) : null;
+    }
+}
+```
+
+The deprecated `RequestContextResolverInterface::fromRequest(Request)` still works until 2.0; users holding no set
 in the context, and requests whose context cannot be resolved, are refused. With `skip_strangers: true` those are left
 to the controller (404 existence mask); a route with the default `_rbac_guard: false` is always left to its controller
 (share links). Controllers keep `denyAccessUnlessGranted()` as a second layer.
@@ -262,33 +288,59 @@ final class AuditPermissionSets
 
 ## Standard Symfony and DDD / hexagonal hosts
 
-Both paths are supported (1.1); the standard one is the zero-config default.
+Both paths are supported (1.1, ports completed in 1.2); the standard one is the zero-config default.
 
-- **Standard host:** `RbacContextInterface` on your entities, `PermissionChecker` / `is_granted('permission:…')`, the
-  admin UI on `storage.type: doctrine`. Edits are DBAL statements on your default manager's connection: they never
-  flush it, so your own pending changes are not committed by an edit.
-- **DDD / hexagonal host:** keep the domain free of the bundle: resolve contexts with a `ContextResolverInterface`
-  (string ids, no interface on your entities), feed grants through `GrantProviderInterface`, depend on
-  `PermissionCheckerInterface` / `PermissionSetManagerInterface`, audit with `actorId`, and keep the record off your
-  domain manager:
+### Standard host
 
-  ```yaml
-  doctrine:
-      orm:
-          default_entity_manager: default
-          entity_managers:
-              default: { connection: default, mappings: { App: { type: xml, dir: '%kernel.project_dir%/config/doctrine', prefix: 'App\\Domain' } } }
-              rbac: { connection: default }   # same or another connection
-  nowo_rbac_kit:
-      storage: { type: doctrine }
-      doctrine: { entity_manager: rbac }
-  ```
+`RbacContextInterface` on your entities, `PermissionChecker` / `is_granted('permission:…')`, the admin UI on
+`storage.type: doctrine`. Edits are DBAL statements on your default manager's connection: they never flush it, so
+your own pending changes are not committed by an edit. The request guard and bypass vetoes work with the framework-free
+ports below as well; a 1.1 host keeps its `RequestContextResolverInterface` / `BypassVetoInterface` services until 2.0
+(a build-time deprecation names each one).
 
-  `PermissionSetRecord` is then mapped on `rbac` only (also off an `auto_mapping` default) and the bundle clears that
-  manager at the end of every request, message and command; your managers are never flushed, cleared or reset.
-  `storage.type: service` remains the fully custom path (your own `PermissionSetStorageInterface`).
-- `BypassVetoInterface` and `RequestContextResolverInterface` take Symfony security / HTTP types on purpose: they are
-  adapter-layer SPIs, not domain ports.
+### DDD host
+
+Keep the domain free of the bundle and of Symfony types (REQ-ARCH-001): resolve contexts with a
+`ContextResolverInterface` (string ids, no interface on your entities), feed grants through `GrantProviderInterface`,
+depend on `PermissionCheckerInterface` / `PermissionSetManagerInterface`, audit with `actorId`, implement the request
+guard and veto adapters on `RbacRequestContextResolverInterface` / `RbacBypassVetoInterface` (no `Request`, no
+`TokenInterface`), and keep the record off your domain manager:
+
+```yaml
+doctrine:
+    orm:
+        default_entity_manager: default
+        entity_managers:
+            default: { connection: default, mappings: { App: { type: xml, dir: '%kernel.project_dir%/config/doctrine', prefix: 'App\\Domain' } } }
+            rbac: { connection: default }   # same or another connection
+nowo_rbac_kit:
+    storage: { type: doctrine }
+    doctrine: { entity_manager: rbac }
+```
+
+`PermissionSetRecord` is then mapped on `rbac` only (also off an `auto_mapping` default) and the bundle clears that
+manager at the end of every request, message and command; your managers are never flushed, cleared or reset.
+`storage.type: service` remains the fully custom path (your own `PermissionSetStorageInterface`).
+
+Every port then takes scalars, bundle VOs or your own objects (`object`). `tests/Integration/Ddd/DddHostPortsKernelTest`
+is such a host: a plain domain project, only the new ports, 300 alternating requests on one kept-alive kernel.
+
+### Framework-free values (`RbacRequest`, `RbacActor`)
+
+- `RbacRequest` (request guard): public `method`, `routeName`, `scheme`, `host`; `path()`, `routeParam()` /
+  `routeParams()` (scalar route parameters), `attribute()` (scalar request attributes not starting with `_`),
+  `header()` (only `request_guard.context_headers`). Object attributes, cookies, the query string, the body and the
+  session are never copied: resolve the context from an id.
+- `RbacActor` (bypass vetoes): public `userIdentifier`, `roles`, `reachableRoles`, `impersonatorIdentifier`,
+  `firewallName`; `user()` and `tokenAttribute()`.
+- The path, route parameters, attributes, headers, the user object and the token attributes are not properties: they live in
+  an internal `WeakMap` keyed by the VO, so `dump()`, `var_export()`, `print_r()`, an `(array)` cast, `json_encode()`
+  or `serialize()` of a VO never shows them (a password hash, a share-link token, a credential kept on the token), and
+  a clone or an unserialized copy has none (`RbacActor::user()` throws on a copy). Both are built per request or per
+  decision and never stored (worker mode, kernel reset false). Never keep one in a property of your resolver or veto:
+  it would keep the user object and the token attributes alive into the next request.
+- Headers are client-controlled. Resolve the context from the same source your controller loads data from (usually
+  the route parameter); a tenant header that disagrees with `{projectId}` must not decide the project.
 
 ## Overriding templates
 

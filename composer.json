@@ -49,6 +49,7 @@
         "symfony/config": "^7.4 || ^8.0",
         "symfony/console": "^7.4 || ^8.0",
         "symfony/dependency-injection": "^7.4 || ^8.0",
+        "symfony/deprecation-contracts": "^3.5",
         "symfony/event-dispatcher": "^7.4 || ^8.0",
         "symfony/form": "^7.4 || ^8.0",
         "symfony/framework-bundle": "^7.4 || ^8.0",
@@ -89,6 +90,7 @@
         "symfony/phpunit-bridge": "^7.4 || ^8.0",
         "symfony/security-bundle": "^7.4 || ^8.0",
         "symfony/translation": "^7.4 || ^8.0",
+        "symfony/var-dumper": "^7.4 || ^8.0",
         "symfony/yaml": "^7.4 || ^8.0"
     },
     "suggest": {

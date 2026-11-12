@@ -8,6 +8,7 @@ use InvalidArgumentException;
 use Nowo\RbacKitBundle\Context\ContextId;
 use Nowo\RbacKitBundle\Context\DefaultContextResolver;
 use Nowo\RbacKitBundle\Context\NullRequestContextResolver;
+use Nowo\RbacKitBundle\Context\RbacRequest;
 use Nowo\RbacKitBundle\Grant\Assignment;
 use Nowo\RbacKitBundle\Grant\GrantResolver;
 use Nowo\RbacKitBundle\Grant\NullGrantProvider;
@@ -104,6 +105,7 @@ final class GrantResolverTest extends TestCase
         self::assertNull($resolver->contextId(new Project('5', 'Project')), 'a class-like type is refused');
         self::assertNull($resolver->contextId(new Project('5', '')));
         self::assertNull((new NullRequestContextResolver())->fromRequest(Request::create('/')));
+        self::assertNull((new NullRequestContextResolver())->contextOf(new RbacRequest('GET', '/')));
     }
 
     /**

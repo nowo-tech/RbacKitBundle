@@ -12,6 +12,9 @@ use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
  *
  * Vetoes are asked on every decision of a user holding a bypass role (their answer is part of the memo key), so a
  * "view as member" switch toggled during a request is seen by the next check. They must be cheap.
+ *
+ * @deprecated since 1.2, implement {@see RbacBypassVetoInterface} (framework-free {@see RbacActor}); removed in 2.0.
+ *             A service implementing both is asked through the new interface.
  */
 interface BypassVetoInterface
 {

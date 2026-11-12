@@ -13,6 +13,34 @@
 
 ## Unreleased
 
+Target: 1.2.0. **No configuration change and no change of any permission decision.** Two adapter SPIs gained a
+framework-free twin (REQ-ARCH-001 rule 3); the old ones are deprecated and removed in 2.0.
+
+| Deprecated (removed in 2.0) | Replacement |
+|---|---|
+| `Context\RequestContextResolverInterface::fromRequest(Request $request): ?object` | `Context\RbacRequestContextResolverInterface::contextOf(RbacRequest $request): ?object` |
+| `Security\BypassVetoInterface::vetoes(TokenInterface $token, ?object $subject): bool` | `Security\RbacBypassVetoInterface::vetoesBypass(RbacActor $actor, ?object $subject): bool` |
+
+Migration:
+
+1. Request context resolver (`request_guard.context_resolver`): implement `RbacRequestContextResolverInterface`.
+   `$request->attributes->get('id')` becomes `$request->routeParam('id')` (or `attribute('id')`),
+   `$request->getPathInfo()` becomes `$request->path()`; a header becomes
+   `$request->header('x-tenant')` after listing it in `request_guard.context_headers`. Object attributes, cookies, the
+   query string and the session are not available: resolve from an id.
+2. Bypass vetoes: implement `RbacBypassVetoInterface`. `$token->getUserIdentifier()` → `$actor->userIdentifier`,
+   `$token->getRoleNames()` → `$actor->roles` (`$actor->reachableRoles` after the hierarchy), `$token->getUser()` →
+   `$actor->user()`, `$token->getAttribute('x')` → `$actor->tokenAttribute('x')`, a `SwitchUserToken` original user →
+   `$actor->impersonatorIdentifier`. Autoconfiguration tags it as before.
+3. During the transition a class may implement both interfaces; the bundle then calls only the new method. Remove the
+   deprecated one before 2.0.
+4. A configured resolver or a tagged veto implementing neither interface now fails the container build (before, a
+   resolver failed with a type error at the first request and a hand-tagged veto with only a `vetoes()` method worked
+   by duck typing). Make such a veto implement `RbacBypassVetoInterface`.
+5. Never keep the `RbacRequest` / `RbacActor` in a service property (worker mode).
+
+`symfony/deprecation-contracts` is now a direct requirement (it was already installed through Symfony).
+
 ## To 1.1.0
 
 Standard hosts: **no configuration change**. Permission-set edits no longer flush your default entity manager (they

@@ -64,6 +64,6 @@ final class UiTest extends TestCase
 
         self::assertInstanceOf(NowoRbacKitExtension::class, $bundle->getContainerExtension());
         self::assertSame($bundle->getContainerExtension(), $bundle->getContainerExtension());
-        self::assertCount(5, array_filter($container->getCompilerPassConfig()->getPasses(), static fn (object $pass): bool => str_starts_with($pass::class, 'Nowo\\RbacKitBundle\\')));
+        self::assertCount(6, array_filter($container->getCompilerPassConfig()->getPasses(), static fn (object $pass): bool => str_starts_with($pass::class, 'Nowo\\RbacKitBundle\\')));
     }
 }

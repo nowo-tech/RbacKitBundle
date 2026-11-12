@@ -19,10 +19,16 @@ use function memory_get_usage;
 /**
  * LH-RBAC-M1 (1.1): two kept-alive workers (FrankenPHP without kernel reset, no services resetter) on one database.
  * A permission revoked on worker A is refused by worker B on its next request; a rolled-back edit never stays in the
- * memo (LH-RBAC-L1).
+ * memo (LH-RBAC-L1). The 200-request loop alternates alice and bob (plan C8).
  */
 final class RbacWorkerMemoTest extends KernelTestCase
 {
+    /** The home page checks as alice (project sets in billing and mobile). */
+    private const ALICE = "summary:yes\nexport:no\ntriage:yes\nroute:yes\narea:yes\n";
+
+    /** The home page checks as bob (a global auditor). */
+    private const BOB = "summary:no\nexport:yes\ntriage:no\nroute:no\narea:no\n";
+
     public function testARevokedPermissionIsRefusedOnTheOtherWorkersNextRequest(): void
     {
         $workerA = $this->worker();
@@ -41,7 +47,9 @@ final class RbacWorkerMemoTest extends KernelTestCase
 
         $baseline = 0;
         for ($i = 0; $i < 200; ++$i) {
-            $this->home($workerB);
+            // Plan C8: alice and bob alternate on the same kept-alive worker; each sees only their own grants.
+            $user = $i % 2 === 0 ? 'alice' : 'bob';
+            self::assertSame($user === 'alice' ? self::ALICE : self::BOB, $this->home($workerB, $user), $i . ': ' . $user);
             if ($i === 30) {
                 $baseline = memory_get_usage();
             }
@@ -75,13 +83,13 @@ final class RbacWorkerMemoTest extends KernelTestCase
     }
 
     /**
-     * GET / as alice through the `http_kernel` service (no kernel reset between requests).
+     * GET / as a user through the `http_kernel` service (no kernel reset between requests).
      */
-    private function home(RbacTestKernel $kernel): string
+    private function home(RbacTestKernel $kernel, string $user = 'alice'): string
     {
         $httpKernel = $kernel->getContainer()->get('http_kernel');
         self::assertInstanceOf(HttpKernel::class, $httpKernel);
-        $request  = Request::create('/', server: ['PHP_AUTH_USER' => 'alice', 'PHP_AUTH_PW' => 'alice', 'REMOTE_ADDR' => '203.0.113.9']);
+        $request  = Request::create('/', server: ['PHP_AUTH_USER' => $user, 'PHP_AUTH_PW' => $user, 'REMOTE_ADDR' => '203.0.113.9']);
         $response = $httpKernel->handle($request, HttpKernelInterface::MAIN_REQUEST, false);
         $httpKernel->terminate($request, $response);
 

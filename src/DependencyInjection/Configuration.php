@@ -17,12 +17,17 @@ use function array_diff;
 use function array_filter;
 use function array_keys;
 use function array_map;
+use function array_unique;
+use function array_values;
+use function get_debug_type;
 use function implode;
+use function in_array;
 use function is_array;
 use function is_string;
 use function preg_match;
 use function sprintf;
 use function str_starts_with;
+use function strtolower;
 use function trim;
 
 use const ARRAY_FILTER_USE_BOTH;
@@ -33,6 +38,16 @@ use const ARRAY_FILTER_USE_BOTH;
  */
 final class Configuration implements ConfigurationInterface
 {
+    /** Headers never copied into the RbacRequest (credentials, cookies, client-IP, proxy and rewrite headers). */
+    private const REFUSED_HEADERS = ['authorization', 'proxy-authorization', 'cookie', 'set-cookie', 'forwarded', 'x-real-ip', 'x-original-url', 'x-rewrite-url', 'referer', 'ssl-client-cert', 'via', 'x-host', 'dpop'];
+
+    /**
+     * Header names refused by pattern: credentials and secrets, client-IP headers (true-client-ip, cf-connecting-ip,
+     * fastly-client-ip, …), auth-proxy identity headers (remote-user, x-ms-client-principal*, x-pomerium-claim-*,
+     * x-user-email), and the x-forwarded-*, x-original-*, x-envoy-*, x-ssl-* and x-client-* families.
+     */
+    private const REFUSED_HEADER_PATTERN = '/token|secret|key|auth|session|signature|pass|pwd|cookie|csrf|jwt|bearer|credential|cert|hmac|otp|oidc|client-ip|connecting-ip|remote-user|client-principal|claim|user-email|^x-forwarded-|^x-original-|^x-envoy-|^x-ssl-|^x-client-|^dpop$|^via$|^x-host$/';
+
     /** Extension alias / root key. */
     public const ALIAS = 'nowo_rbac_kit';
 
@@ -76,6 +91,28 @@ final class Configuration implements ConfigurationInterface
             ->end();
 
         return $treeBuilder;
+    }
+
+    /**
+     * The `request_guard.context_headers` entries that may not be copied: not a header name, a credential, cookie or
+     * forwarding header, or a name that looks like a secret (since 1.2).
+     *
+     * @param array<array-key, mixed> $headers
+     *
+     * @return list<string>
+     */
+    public static function refusedContextHeaders(array $headers): array
+    {
+        $refused = [];
+        foreach ($headers as $header) {
+            if (!is_string($header) || preg_match('/^[a-z0-9][a-z0-9-]{0,63}$/', $header) !== 1
+                || in_array($header, self::REFUSED_HEADERS, true)
+                || preg_match(self::REFUSED_HEADER_PATTERN, $header) === 1) {
+                $refused[] = is_string($header) ? $header : get_debug_type($header);
+            }
+        }
+
+        return $refused;
     }
 
     /**
@@ -263,7 +300,17 @@ final class Configuration implements ConfigurationInterface
             ->addDefaultsIfNotSet()
             ->children()
                 ->booleanNode('enabled')->defaultFalse()->end()
-                ->scalarNode('context_resolver')->info('Service id implementing RequestContextResolverInterface (the context of a request); null = no request has a context (context routes are refused unless skip_strangers or the route default _rbac_guard: false).')->defaultNull()->end()
+                ->scalarNode('context_resolver')->info('Service id implementing RbacRequestContextResolverInterface (or the deprecated RequestContextResolverInterface): the context of a request; null = no request has a context (context routes are refused unless skip_strangers or the route default _rbac_guard: false).')->defaultNull()->end()
+                ->arrayNode('context_headers')
+                    ->info('Since 1.2: request headers copied into the RbacRequest given to an RbacRequestContextResolverInterface (e.g. x-tenant). Default none. Values are client-controlled: read the context from the same source the controller loads data from. Refused: credential and cookie headers, client-IP headers (x-real-ip, true-client-ip, cf-connecting-ip, …), proxy and auth-proxy identity headers (forwarded, via, x-host, remote-user, x-ms-client-principal*, x-pomerium-claim-*, x-user-email, dpop), the x-forwarded-*, x-original-*, x-envoy-*, x-ssl-* and x-client-* families, and names containing token, secret, key, auth, session, signature, pass, pwd, cookie, csrf, jwt, bearer, credential, cert, hmac, otp or oidc.')
+                    ->scalarPrototype()->end()
+                    ->defaultValue([])
+                    ->beforeNormalization()->ifArray()->then(static fn (array $v): array => array_values(array_unique(array_map(static fn (mixed $name): mixed => is_string($name) ? strtolower(trim($name)) : $name, $v))))->end()
+                    ->validate()
+                        ->ifTrue(static fn (array $v): bool => self::refusedContextHeaders($v) !== [])
+                        ->then(static fn (array $v): never => throw new InvalidConfigurationException(sprintf('request_guard.context_headers: these headers may carry credentials or are not header names and cannot be copied into the RbacRequest: %s.', implode(', ', self::refusedContextHeaders($v)))))
+                    ->end()
+                ->end()
                 ->booleanNode('skip_strangers')->info('true = users holding no set in the request\'s context, and requests whose context is not resolved, are left to the controller (its 404 / share-link answer). Default false: refused (403).')->defaultFalse()->end()
             ->end();
     }

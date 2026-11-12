@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\RbacKitBundle\Security;
 
+use LogicException;
 use Nowo\RbacKitBundle\Context\ContextId;
 use Nowo\RbacKitBundle\Context\ContextResolverInterface;
 use Nowo\RbacKitBundle\Grant\GrantResolver;
@@ -20,10 +21,12 @@ use Symfony\Contracts\Service\ResetInterface;
 
 use function array_intersect;
 use function count;
+use function get_debug_type;
 use function implode;
 use function in_array;
 use function is_object;
 use function sort;
+use function sprintf;
 use function str_starts_with;
 use function strlen;
 use function substr;
@@ -34,7 +37,7 @@ use function substr;
  * Order of the decision: an empty catalogue, an unknown key, an unmapped route (unless `catalogue.open_routes` or
  * `catalogue.unmapped_routes: allow`), a guest, or a context permission without a resolvable context subject are
  * refused (fail closed); then every {@see PermissionGateInterface} may refuse; then `voter.bypass_roles` pass (unless
- * a {@see BypassVetoInterface} suspends it); a **context** key passes when a set the user holds in that context (its
+ * a {@see RbacBypassVetoInterface} — or the deprecated {@see BypassVetoInterface} — suspends it); a **context** key passes when a set the user holds in that context (its
  * typed id, {@see ContextId}) grants it; a **global** key passes on `role_grants` (after the role hierarchy), a global
  * assignment, — only for keys flagged `aggregate` — when a set the user holds in a context grants it, or — for users
  * without any assignment — when `voter.fallback_permission_set` grants it. The aggregate branch looks at **the
@@ -67,7 +70,8 @@ final class PermissionVoter extends Voter implements ResetInterface
      * @param bool $allowUnmappedRoutes `catalogue.unmapped_routes: allow`
      * @param string|null $fallbackSet `voter.fallback_permission_set`
      * @param iterable<PermissionGateInterface> $gates deny-first gates
-     * @param iterable<BypassVetoInterface> $vetoes bypass vetoes
+     * @param iterable<BypassVetoInterface|RbacBypassVetoInterface> $vetoes bypass vetoes (a service implementing both is
+     *                                                                      asked through {@see RbacBypassVetoInterface})
      * @param int $memoLimit decisions memoised per request before the memo is cleared
      */
     public function __construct(
@@ -159,7 +163,7 @@ final class PermissionVoter extends Voter implements ResetInterface
 
         $roles = $this->roleHierarchy?->getReachableRoleNames($token->getRoleNames()) ?? $token->getRoleNames();
         sort($roles);
-        $bypass = array_intersect($this->bypassRoles, $roles) !== [] && !$this->bypassVetoed($token, $subject);
+        $bypass = array_intersect($this->bypassRoles, $roles) !== [] && !$this->bypassVetoed($token, $user, $roles, $subject);
         if ($subject !== null && $subjectId === null) {
             // A subject that is not a context: a gate may depend on it, so the decision is not memoised.
             return $this->decide($permission, $user, $subject, null, $roles, $bypass, null);
@@ -225,10 +229,27 @@ final class PermissionVoter extends Voter implements ResetInterface
         return $subjectContextId !== null && $this->grants->grants($user, $subjectContextId, $key);
     }
 
-    private function bypassVetoed(TokenInterface $token, ?object $subject): bool
+    /**
+     * Whether a veto suspends the bypass. The framework-free {@see RbacActor} is built once per decision, only when a
+     * veto implements {@see RbacBypassVetoInterface}; a tagged service implementing neither port fails closed (throws).
+     *
+     * @param list<string> $roles reachable role names
+     *
+     * @throws LogicException when a tagged veto implements neither veto interface
+     */
+    private function bypassVetoed(TokenInterface $token, UserInterface $user, array $roles, ?object $subject): bool
     {
+        $actor = null;
         foreach ($this->vetoes as $veto) {
-            if ($veto->vetoes($token, $subject)) {
+            if ($veto instanceof RbacBypassVetoInterface) {
+                $actor ??= RbacActorFactory::fromToken($token, $user, $roles);
+                $vetoed = $veto->vetoesBypass($actor, $subject);
+            } elseif ($veto instanceof BypassVetoInterface) {
+                $vetoed = $veto->vetoes($token, $subject);
+            } else {
+                throw new LogicException(sprintf('The bypass veto "%s" must implement "%s".', get_debug_type($veto), RbacBypassVetoInterface::class));
+            }
+            if ($vetoed) {
                 return true;
             }
         }
