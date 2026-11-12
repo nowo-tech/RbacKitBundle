@@ -112,7 +112,8 @@ Every key, its default and its validation: [docs/CONFIGURATION.md](docs/CONFIGUR
 ## Usage
 
 The decision model, grant providers, contexts, gates, the request guard, coverage, the admin UI and template overrides:
-[docs/USAGE.md](docs/USAGE.md).
+[docs/USAGE.md](docs/USAGE.md). Both host kinds are supported: [Standard host](docs/USAGE.md#standard-host) (zero config)
+and [DDD host](docs/USAGE.md#ddd-host) (framework-free ports only, opt-in).
 
 ## Demo
 

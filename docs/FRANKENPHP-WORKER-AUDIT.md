@@ -33,7 +33,7 @@ evaluated:
 | `ResetInterface` / `kernel.reset` | ✅ | The four memo services; proven by `VoterIntegrationTest::grantsAreLoadedOncePerRequestAndResetBetweenRequests` |
 | Cross-user leakage | ✅ | Grants and decisions are keyed by user class + identifier (+ roles, typed context id and veto state for decisions; non-context subjects are not memoised); a user never reads another user's memo |
 | Memory growth | ✅ | Bounded: catalogue `max_permissions`, stored sets `max_sets`, 64 users and `max_assignments` per user, 2048 decisions (memos are cleared when full) |
-| Static properties / `static` locals | ✅ | None |
+| Static properties / `static` locals | ✅ | One (1.2): `Internal\HiddenValues::$values`, a `WeakMap` keyed by the per-request `RbacRequest` / per-decision `RbacActor`; an entry is collected with its VO, so nothing crosses requests (`@igor-ignore` / PHPStan ignore with justification) |
 | Request / user captured in services | ✅ | `AccessGuard` reads `RequestStack::getMainRequest()` and the token per call and trusts the token only with a firewall context; the voter receives the token per call |
 | Superglobals, `putenv`, `ini_set`, `setlocale`, timezone | ✅ | None |
 | Doctrine | ✅ | Entity manager resolved per call from the registry (DoctrineBundle resets it between requests) |
@@ -59,8 +59,14 @@ a user's assignments were seen only after the worker restarted (LH-RBAC-M1, auth
 `RbacMemoResetListener` clears the four memos at the start of every main request / Messenger message and at the end of
 every request, message and command, and a permission-set write drops them at once. Proven by
 `RbacWorkerMemoTest` (two kept-alive kernels on one database driven through `http_kernel`: a permission revoked on
-worker A is refused by worker B on its next request; 200 requests with flat memory; a rolled-back edit is not
-memoised).
+worker A is refused by worker B on its next request; 200 requests alternating alice and bob, each seeing only their
+own grants, with flat memory; a rolled-back edit is not memoised).
+
+1.2 (framework-free ports): the guard builds one `RbacRequest` per request and the voter one `RbacActor` per decision
+(only when a veto implements `RbacBypassVetoInterface`); neither is stored in a service. Proven by
+`DddHostPortsKernelTest::aKeptAliveWorkerAnswersEveryUserTheSameWay` (one kernel, no services resetter, 300 main
+requests through `http_kernel` as alice, the superuser admin, bob and a guest in alternation, the same status every
+time, memory growth under 4 MiB).
 
 ## Usage recommendations in worker mode
 
@@ -68,8 +74,9 @@ memoised).
 - Use a `storage.cache_pool` shared by every worker (filesystem on one host, Redis / Doctrine otherwise) so an edit made
   in one worker reaches the others after their next reset; with a per-host pool the cached rows expire after
   `storage.cache_ttl` (default 300 s).
-- Your `GrantProviderInterface`, `PermissionGateInterface` and `BypassVetoInterface` services must be stateless too (or
-  implement `ResetInterface`).
+- Your `GrantProviderInterface`, `PermissionGateInterface`, `RbacBypassVetoInterface` (or deprecated
+  `BypassVetoInterface`) and request context resolver services must be stateless too (or clear their state at the
+  request boundary; `ResetInterface` alone is not enough with kernel reset false).
 
 ## Re-audit triggers
 

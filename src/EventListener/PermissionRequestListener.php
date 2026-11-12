@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Nowo\RbacKitBundle\EventListener;
 
 use Nowo\RbacKitBundle\Context\ContextResolverInterface;
+use Nowo\RbacKitBundle\Context\RbacRequest;
+use Nowo\RbacKitBundle\Context\RbacRequestContextResolverInterface;
 use Nowo\RbacKitBundle\Context\RequestContextResolverInterface;
 use Nowo\RbacKitBundle\Grant\GrantResolver;
+use Nowo\RbacKitBundle\Http\RbacRequestFactory;
 use Nowo\RbacKitBundle\Permission\Permission;
 use Nowo\RbacKitBundle\Permission\PermissionCatalog;
 use Nowo\RbacKitBundle\Permission\PermissionScope;
@@ -32,6 +35,10 @@ use function sprintf;
  * `request_guard.skip_strangers: true` leaves users holding no set in the context — and unresolved contexts — to the
  * controller, which keeps its own answer (404 existence mask). Registered with an explicit `kernel.event_listener` tag
  * (the attribute documents the event). Stateless.
+ *
+ * The request's context comes from the `request_guard.context_resolver` service: through the framework-free
+ * {@see RbacRequestContextResolverInterface} (given an {@see RbacRequest} built per
+ * request) when it implements it, otherwise through the deprecated {@see RequestContextResolverInterface}.
  */
 final readonly class PermissionRequestListener
 {
@@ -40,15 +47,17 @@ final readonly class PermissionRequestListener
 
     /**
      * @param bool $skipStrangers `request_guard.skip_strangers`
+     * @param list<string> $contextHeaders `request_guard.context_headers` (lower-case names copied into the RbacRequest)
      */
     public function __construct(
         private PermissionCatalog $catalog,
         private AuthorizationCheckerInterface $authorization,
         private TokenStorageInterface $tokens,
-        private RequestContextResolverInterface $requestContexts,
+        private RbacRequestContextResolverInterface|RequestContextResolverInterface $requestContexts,
         private ContextResolverInterface $contexts,
         private GrantResolver $grants,
         private bool $skipStrangers = false,
+        private array $contextHeaders = [],
     ) {
     }
 
@@ -77,7 +86,9 @@ final readonly class PermissionRequestListener
 
         $context = null;
         if ($permission->scope === PermissionScope::Context) {
-            $context   = $this->requestContexts->fromRequest($request);
+            $context = $this->requestContexts instanceof RbacRequestContextResolverInterface
+                ? $this->requestContexts->contextOf(RbacRequestFactory::fromRequest($request, $this->contextHeaders))
+                : $this->requestContexts->fromRequest($request);
             $contextId = $context === null ? null : $this->contexts->contextId($context);
             if ($this->skipStrangers && ($contextId === null || !$this->grants->holdsSetIn($user, $contextId))) {
                 return;

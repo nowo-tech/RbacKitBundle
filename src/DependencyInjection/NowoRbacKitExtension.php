@@ -42,6 +42,7 @@ use Nowo\RbacKitBundle\Security\PermissionCheckerInterface;
 use Nowo\RbacKitBundle\Security\PermissionGateInterface;
 use Nowo\RbacKitBundle\Security\PermissionVoter;
 use Nowo\RbacKitBundle\Security\RbacAdminAccessCheckerInterface;
+use Nowo\RbacKitBundle\Security\RbacBypassVetoInterface;
 use Nowo\RbacKitBundle\Twig\RbacTwigExtension;
 use Nowo\RbacKitBundle\Ui\ActionForms;
 use Nowo\RbacKitBundle\Ui\RbacPageFactory;
@@ -128,7 +129,7 @@ final class NowoRbacKitExtension extends Extension implements PrependExtensionIn
         $config = $this->processConfiguration(new Configuration(), $configs);
         $this->assertLiteralBooleans($config);
 
-        /** @var array{catalogue: array{translation_domain: string, max_permissions: int, permissions: array<string, array{scope: string, routes: list<string>, group: string|null, label: string|null, description: string|null, aggregate: bool}>, aliases: array<string, string>, open_routes: list<string>, unmapped_routes: string}, permission_sets: array<string, array{label: string|null, description: string|null, permissions: list<string>, all: bool, include_global: bool, except: list<string>, locked: bool}>, role_grants: array<string, list<string>>, voter: array{bypass_roles: list<string>, fallback_permission_set: string|null, max_assignments: int}, grant_provider: string|null, context_resolver: string|null, storage: array{type: string, service: string|null, cache_pool: string|null, cache_ttl: int, max_sets: int, usage_provider: string|null}, doctrine: array{table_prefix: string}, request_guard: array{enabled: bool, context_resolver: string|null, skip_strangers: bool}, coverage: array{prefixes: list<string>, ignore_routes: list<string>}, web_ui: array{enabled: bool, path_prefix: string, layout_template: string|null, templates: array<string, string>}, security: array{access_roles: list<string>, manage_roles: list<string>, access_checker: string|null, allow_unauthenticated: bool}} $config */
+        /** @var array{catalogue: array{translation_domain: string, max_permissions: int, permissions: array<string, array{scope: string, routes: list<string>, group: string|null, label: string|null, description: string|null, aggregate: bool}>, aliases: array<string, string>, open_routes: list<string>, unmapped_routes: string}, permission_sets: array<string, array{label: string|null, description: string|null, permissions: list<string>, all: bool, include_global: bool, except: list<string>, locked: bool}>, role_grants: array<string, list<string>>, voter: array{bypass_roles: list<string>, fallback_permission_set: string|null, max_assignments: int}, grant_provider: string|null, context_resolver: string|null, storage: array{type: string, service: string|null, cache_pool: string|null, cache_ttl: int, max_sets: int, usage_provider: string|null}, doctrine: array{table_prefix: string}, request_guard: array{enabled: bool, context_resolver: string|null, skip_strangers: bool, context_headers: list<string>}, coverage: array{prefixes: list<string>, ignore_routes: list<string>}, web_ui: array{enabled: bool, path_prefix: string, layout_template: string|null, templates: array<string, string>}, security: array{access_roles: list<string>, manage_roles: list<string>, access_checker: string|null, allow_unauthenticated: bool}} $config */
         $webUi    = $config['web_ui']['enabled'];
         $security = $this->hasSecurityBundle($container);
         if ($webUi && !$config['security']['allow_unauthenticated'] && !$security) {
@@ -145,6 +146,7 @@ final class NowoRbacKitExtension extends Extension implements PrependExtensionIn
         $container->registerForAutoconfiguration(PermissionProviderInterface::class)->addTag(NowoRbacKitBundle::PERMISSION_PROVIDER_TAG);
         $container->registerForAutoconfiguration(PermissionGateInterface::class)->addTag(NowoRbacKitBundle::PERMISSION_GATE_TAG);
         $container->registerForAutoconfiguration(BypassVetoInterface::class)->addTag(NowoRbacKitBundle::BYPASS_VETO_TAG);
+        $container->registerForAutoconfiguration(RbacBypassVetoInterface::class)->addTag(NowoRbacKitBundle::BYPASS_VETO_TAG);
 
         $this->registerCatalogue($container, $config['catalogue']);
         $this->registerSets($container, $config);
@@ -266,7 +268,7 @@ final class NowoRbacKitExtension extends Extension implements PrependExtensionIn
      */
     private function registerVoter(ContainerBuilder $container, array $config): void
     {
-        /** @var array{catalogue: array{open_routes: list<string>, unmapped_routes: string}, permission_sets: array<string, array{permissions: list<string>, all: bool, except: list<string>}>, role_grants: array<string, list<string>>, voter: array{bypass_roles: list<string>, fallback_permission_set: string|null}, context_resolver: string|null, request_guard: array{enabled: bool, context_resolver: string|null, skip_strangers: bool}, coverage: array{prefixes: list<string>, ignore_routes: list<string>}} $config */
+        /** @var array{catalogue: array{open_routes: list<string>, unmapped_routes: string}, permission_sets: array<string, array{permissions: list<string>, all: bool, except: list<string>}>, role_grants: array<string, list<string>>, voter: array{bypass_roles: list<string>, fallback_permission_set: string|null}, context_resolver: string|null, request_guard: array{enabled: bool, context_resolver: string|null, skip_strangers: bool, context_headers: list<string>}, coverage: array{prefixes: list<string>, ignore_routes: list<string>}} $config */
         if (is_string($config['context_resolver']) && $config['context_resolver'] !== '') {
             $container->setAlias(ContextResolverInterface::class, $config['context_resolver'])->setPublic(true);
         } else {
@@ -336,6 +338,7 @@ final class NowoRbacKitExtension extends Extension implements PrependExtensionIn
                 new Reference(ContextResolverInterface::class),
                 new Reference(GrantResolver::class),
                 $guard['skip_strangers'],
+                $guard['context_headers'],
             ]))->addTag('kernel.event_listener', ['event' => KernelEvents::CONTROLLER]));
         }
     }

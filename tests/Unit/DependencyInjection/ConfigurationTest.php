@@ -33,6 +33,28 @@ final class ConfigurationTest extends TestCase
         self::assertFalse($config['request_guard']['skip_strangers'], 'L1: strangers are refused');
         self::assertSame(300, $config['storage']['cache_ttl'], 'L3: the cache entry expires');
         self::assertArrayNotHasKey('global_aggregation', $config['voter'], 'H1: aggregation is per key');
+        self::assertSame([], $config['request_guard']['context_headers'], '1.2: no header reaches the RbacRequest by default');
+    }
+
+    /**
+     * 1.2: `request_guard.context_headers` is normalised (lower case, trimmed, unique) and refuses headers that may
+     * carry credentials.
+     */
+    #[Test]
+    public function contextHeadersAreNormalisedAndCredentialHeadersRefused(): void
+    {
+        $config = $this->process(['request_guard' => ['context_headers' => [' X-Tenant ', 'x-tenant', 'Accept-Language']]]);
+        self::assertSame(['x-tenant', 'accept-language'], $config['request_guard']['context_headers']);
+
+        foreach (['Authorization', 'cookie', 'X-Api-Key', 'x-auth-user', 'x-session-id', 'x-csrf-token', 'x-signature', 'x-password', 'forwarded', 'x-forwarded-for', 'referer', 'bad header', ''] as $header) {
+            try {
+                $this->process(['request_guard' => ['context_headers' => [$header]]]);
+                self::fail('accepted: ' . $header);
+            } catch (InvalidConfigurationException $exception) {
+                self::assertStringContainsString('request_guard.context_headers', $exception->getMessage(), $header);
+            }
+        }
+        self::assertSame(['array'], Configuration::refusedContextHeaders([['not', 'a', 'name']]));
     }
 
     #[Test]

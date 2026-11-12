@@ -69,8 +69,9 @@ nowo_rbac_kit:
         entity_manager: ~                 # 1.1: dedicated manager of PermissionSetRecord (null: default manager)
     request_guard:
         enabled: false                    # 403 before the controller on a catalogued route without its key
-        context_resolver: ~               # RequestContextResolverInterface service id (the context of a request)
+        context_resolver: ~               # RbacRequestContextResolverInterface service id (1.2; or the deprecated RequestContextResolverInterface)
         skip_strangers: false             # true = strangers / unresolved contexts left to the controller
+        context_headers: []               # 1.2: headers copied into the RbacRequest (e.g. x-tenant); credential headers refused
     coverage:
         prefixes: []                      # default path prefixes of nowo:rbac:check
         ignore_routes: []
@@ -165,8 +166,17 @@ set).
 
 `request_guard.enabled: true` registers a `kernel.controller` listener: a main request to a catalogued route is refused
 with the firewall's 403 when the user lacks the route's key, and a guest gets the firewall's entry point (login / 401).
-For a context key the `request_guard.context_resolver` service (your `RequestContextResolverInterface`) returns the
-request's context; users holding no set in it — and requests whose context is not resolved — are refused too.
+For a context key the `request_guard.context_resolver` service returns the request's context; users holding no set in
+it — and requests whose context is not resolved — are refused too. Implement `RbacRequestContextResolverInterface`
+(1.2, framework-free `RbacRequest`); the deprecated `RequestContextResolverInterface` (Symfony `Request`) still works
+until 2.0, and a service implementing both is called through the new one. A service implementing neither fails the
+container build.
+
+- `context_headers` (1.2, default `[]`): request headers copied into the `RbacRequest` (lower-cased, e.g. `x-tenant`
+  for a tenant chosen by header). `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie`, `Forwarded`,
+  `X-Forwarded-For`, `X-Original-URL`, `X-Rewrite-URL`, `Referer` and any name containing token, secret, key, auth,
+  session, signature, passw, cookie or csrf are refused (configuration error). Cookies, the query string and the body
+  are never copied.
 
 - `skip_strangers: true` leaves strangers and unresolved contexts to the controller (its 404 existence mask);
   members without the key are still refused.

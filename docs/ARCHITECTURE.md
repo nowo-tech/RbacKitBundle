@@ -57,8 +57,8 @@ typed context id, veto state) and request.
 | `Permission\` | `Permission`, `PermissionScope`, `PermissionCatalog`, `PermissionProviderInterface`, `ConfigPermissionProvider` |
 | `PermissionSet\` | `PermissionSet` (view), `StoredPermissionSet` (row), `PermissionSetRegistry`, `PermissionSetManager`, storages (`Config…`, `Doctrine…`), `PermissionSetUsageInterface`, `PermissionSetException` |
 | `Grant\` | `Assignment`, `GrantProviderInterface`, `NullGrantProvider`, `GrantResolver` |
-| `Context\` | `RbacContextInterface`, `ContextId` (typed ids `<type>:<id>`), `ContextResolverInterface` (+ default), `RequestContextResolverInterface` (+ null) |
-| `Security\` | `PermissionVoter`, `PermissionChecker`, `PermissionGateInterface`, `BypassVetoInterface`, admin `AccessGuard` and access checkers |
+| `Context\` | `RbacContextInterface`, `ContextId` (typed ids `<type>:<id>`), `ContextResolverInterface` (+ default), `RbacRequestContextResolverInterface` + `RbacRequest` VO (1.2), deprecated `RequestContextResolverInterface` (+ null, both ports) |
+| `Security\` | `PermissionVoter`, `PermissionChecker`, `PermissionGateInterface`, `RbacBypassVetoInterface` + `RbacActor` VO (1.2), deprecated `BypassVetoInterface`, admin `AccessGuard` and access checkers |
 | `EventListener\` | `PermissionRequestListener` (request guard), `RbacAdminAccessListener` |
 | `Coverage\`, `Command\` | `PermissionCoverage`, `CoverageReport`, `nowo:rbac:check` |
 | `Controller\`, `Form\`, `Routing\`, `Ui\` | Admin UI: controller, `PermissionSetType`, route loader and names, `ActionForms`, `RbacPages`, `RbacPageFactory` |

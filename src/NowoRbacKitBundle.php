@@ -6,6 +6,7 @@ namespace Nowo\RbacKitBundle;
 
 use Nowo\RbacKitBundle\DependencyInjection\Compiler\CsrfProtectionPass;
 use Nowo\RbacKitBundle\DependencyInjection\Compiler\RbacEntityManagerPass;
+use Nowo\RbacKitBundle\DependencyInjection\Compiler\RbacPortsPass;
 use Nowo\RbacKitBundle\DependencyInjection\Compiler\TwigPathsPass;
 use Nowo\RbacKitBundle\DependencyInjection\Compiler\UnauthenticatedAccessPass;
 use Nowo\RbacKitBundle\DependencyInjection\NowoRbacKitExtension;
@@ -40,7 +41,8 @@ final class NowoRbacKitBundle extends Bundle
     public const BYPASS_VETO_TAG = 'nowo_rbac_kit.bypass_veto';
 
     /**
-     * Registers the compiler passes: Twig paths, CSRF fail-closed guard and the demo-only unauthenticated access.
+     * Registers the compiler passes: Twig paths, CSRF fail-closed guard, the demo-only unauthenticated access, the entity
+     * manager and (1.2) the adapter SPI port checks.
      */
     public function build(ContainerBuilder $container): void
     {
@@ -51,6 +53,8 @@ final class NowoRbacKitBundle extends Bundle
         // 1.1: doctrine.entity_manager is real (fail fast, then the mapping on that manager only).
         $container->addCompilerPass(new RbacEntityManagerPass(checkOnly: true), PassConfig::TYPE_BEFORE_OPTIMIZATION, 10);
         $container->addCompilerPass(new RbacEntityManagerPass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, -10);
+        // 1.2: the context resolver and the bypass vetoes implement a port (framework-free, or the deprecated one).
+        $container->addCompilerPass(new RbacPortsPass(), PassConfig::TYPE_BEFORE_REMOVING);
     }
 
     /**
