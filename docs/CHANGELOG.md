@@ -5,6 +5,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Demo uses the UiKit base style (REQ-DEMO-014)
+
 ## [1.2.0] - 2026-11-12
 
 REQ-ARCH-001 rule 3: framework-free twins of the two adapter SPIs that took Symfony types. Permission decisions are
