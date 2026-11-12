@@ -3,6 +3,7 @@
 ## Table of contents
 
 - [Unreleased](#unreleased)
+- [To 1.2.0](#to-120)
 - [To 1.1.0](#to-110)
 - [To 1.0.0](#to-100)
   - [Requirements](#requirements)
@@ -12,6 +13,14 @@
   - [From the audited candidate 8bd695a](#from-the-audited-candidate-8bd695a)
 
 ## Unreleased
+
+## To 1.2.0
+
+From **1.1.0**:
+
+```bash
+composer update nowo-tech/rbac-kit-bundle
+```
 
 Target: 1.2.0. **No configuration change and no change of any permission decision.** Two adapter SPIs gained a
 framework-free twin (REQ-ARCH-001 rule 3); the old ones are deprecated and removed in 2.0.

@@ -113,7 +113,7 @@ are released as patch versions.
 | Cryptography | — (none) |
 | Permissions / exposure | ✅ (two layers, manage area, opt-in routes) |
 | Limits / DoS | ✅ |
-| AI security audit passed (REQ-SEC-004) | ⏳ First pass (Appendix CI, `8bd695a`): Fail / High; H1, M1 and L1–L6 fixed in code — re-verification pending before the 1.0.0 tag |
+| AI security audit passed (REQ-SEC-004) | ⏳ First pass (Appendix CI, `8bd695a`): Fail / High; H1, M1 and L1–L6 fixed in code — audited (batch Appendix MX, Pass) before the 1.0.0 tag |
 
 ## AI security audit (REQ-SEC-004)
 
