@@ -1,11 +1,11 @@
 {% extends 'base.html.twig' %}
 
 {% block body %}
-    <h1 class="h3" data-testid="demo-project">{{ project.name }}{{ settings|default(false) ? ' — settings' : '' }}</h1>
+    <h1 data-testid="demo-project">{{ project.name }}{{ settings|default(false) ? ' — settings' : '' }}</h1>
     <p>The RbacKit request guard let you in: you hold <code>{{ settings|default(false) ? 'project.settings.view' : 'project.view' }}</code> in this project.</p>
     <ul>
         {% if rbac_can('project.issues.triage', project) %}<li>Triage buttons are shown (<code>project.issues.triage</code>).</li>{% endif %}
-        {% if rbac_can('project.settings.view', project) %}<li><a href="{{ path('demo_project_settings', {project: project.slug}) }}">Settings</a></li>{% endif %}
+        {% if rbac_can('project.settings.view', project) %}<li><a class="nowo-ui-link" href="{{ path('demo_project_settings', {project: project.slug}) }}">Settings</a></li>{% endif %}
     </ul>
-    <p><a href="{{ path('demo_home') }}">Back</a></p>
+    <p><a class="nowo-ui-link" href="{{ path('demo_home') }}">Back</a></p>
 {% endblock %}
