@@ -24,7 +24,8 @@ framework-free twin (REQ-ARCH-001 rule 3); the old ones are deprecated and remov
 Migration:
 
 1. Request context resolver (`request_guard.context_resolver`): implement `RbacRequestContextResolverInterface`.
-   `$request->attributes->get('id')` becomes `$request->routeParam('id')` (or `attribute('id')`); a header becomes
+   `$request->attributes->get('id')` becomes `$request->routeParam('id')` (or `attribute('id')`),
+   `$request->getPathInfo()` becomes `$request->path()`; a header becomes
    `$request->header('x-tenant')` after listing it in `request_guard.context_headers`. Object attributes, cookies, the
    query string and the session are not available: resolve from an id.
 2. Bypass vetoes: implement `RbacBypassVetoInterface`. `$token->getUserIdentifier()` → `$actor->userIdentifier`,
@@ -33,8 +34,10 @@ Migration:
    `$actor->impersonatorIdentifier`. Autoconfiguration tags it as before.
 3. During the transition a class may implement both interfaces; the bundle then calls only the new method. Remove the
    deprecated one before 2.0.
-4. A configured resolver or a tagged veto implementing neither interface now fails the container build (before, it
-   failed with a type error at the first request).
+4. A configured resolver or a tagged veto implementing neither interface now fails the container build (before, a
+   resolver failed with a type error at the first request and a hand-tagged veto with only a `vetoes()` method worked
+   by duck typing). Make such a veto implement `RbacBypassVetoInterface`.
+5. Never keep the `RbacRequest` / `RbacActor` in a service property (worker mode).
 
 `symfony/deprecation-contracts` is now a direct requirement (it was already installed through Symfony).
 

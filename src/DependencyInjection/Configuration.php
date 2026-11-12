@@ -39,7 +39,7 @@ use const ARRAY_FILTER_USE_BOTH;
 final class Configuration implements ConfigurationInterface
 {
     /** Headers never copied into the RbacRequest (credentials, cookies, client-forged forwarding / rewrite headers). */
-    private const REFUSED_HEADERS = ['authorization', 'proxy-authorization', 'cookie', 'set-cookie', 'forwarded', 'x-forwarded-for', 'x-original-url', 'x-rewrite-url', 'referer'];
+    private const REFUSED_HEADERS = ['authorization', 'proxy-authorization', 'cookie', 'set-cookie', 'forwarded', 'x-real-ip', 'x-original-url', 'x-rewrite-url', 'referer', 'ssl-client-cert'];
 
     /** Extension alias / root key. */
     public const ALIAS = 'nowo_rbac_kit';
@@ -100,7 +100,7 @@ final class Configuration implements ConfigurationInterface
         foreach ($headers as $header) {
             if (!is_string($header) || preg_match('/^[a-z0-9][a-z0-9-]{0,63}$/', $header) !== 1
                 || in_array($header, self::REFUSED_HEADERS, true)
-                || preg_match('/token|secret|key|auth|session|signature|passw|cookie|csrf/', $header) === 1) {
+                || preg_match('/token|secret|key|auth|session|signature|pass|pwd|cookie|csrf|jwt|bearer|credential|cert|hmac|otp|oidc|^x-forwarded-/', $header) === 1) {
                 $refused[] = is_string($header) ? $header : get_debug_type($header);
             }
         }
@@ -295,7 +295,7 @@ final class Configuration implements ConfigurationInterface
                 ->booleanNode('enabled')->defaultFalse()->end()
                 ->scalarNode('context_resolver')->info('Service id implementing RbacRequestContextResolverInterface (or the deprecated RequestContextResolverInterface): the context of a request; null = no request has a context (context routes are refused unless skip_strangers or the route default _rbac_guard: false).')->defaultNull()->end()
                 ->arrayNode('context_headers')
-                    ->info('Since 1.2: request headers copied into the RbacRequest given to an RbacRequestContextResolverInterface (e.g. x-tenant). Default none. Credential, cookie and forwarding headers, and names containing token, secret, key, auth, session, signature, passw or cookie, are refused.')
+                    ->info('Since 1.2: request headers copied into the RbacRequest given to an RbacRequestContextResolverInterface (e.g. x-tenant). Default none. Values are client-controlled: read the context from the same source the controller loads data from. Credential, cookie and forwarding headers (x-forwarded-*, x-real-ip, forwarded), and names containing token, secret, key, auth, session, signature, pass, pwd, cookie, csrf, jwt, bearer, credential, cert, hmac, otp or oidc, are refused.')
                     ->scalarPrototype()->end()
                     ->defaultValue([])
                     ->beforeNormalization()->ifArray()->then(static fn (array $v): array => array_values(array_unique(array_map(static fn (mixed $name): mixed => is_string($name) ? strtolower(trim($name)) : $name, $v))))->end()

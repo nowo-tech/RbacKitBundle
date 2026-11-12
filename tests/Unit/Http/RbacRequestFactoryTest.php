@@ -22,7 +22,7 @@ final class RbacRequestFactoryTest extends TestCase
         self::assertSame('POST', $context->method);
         self::assertSame('http', $context->scheme);
         self::assertSame('app.example.test', $context->host);
-        self::assertSame('/projects/billing', $context->path, 'no query string');
+        self::assertSame('/projects/billing', $context->path(), 'no query string');
         self::assertSame('project_show', $context->routeName);
         self::assertSame(['id' => 'billing'], $context->routeParams());
         self::assertSame('yes', $context->attribute('resolved'));

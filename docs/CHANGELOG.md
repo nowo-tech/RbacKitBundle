@@ -11,14 +11,14 @@ unchanged (exhaustive equivalence matrix against the 1.1.0 voter). See [UPGRADIN
 ### Added
 
 - `RbacRequestContextResolverInterface::contextOf(RbacRequest)`: the request guard's context resolver without the
-  Symfony `Request`. `RbacRequest` carries the method, path, route name, scheme and host, plus scalar route parameters,
-  scalar non-internal attributes and the allowlisted headers, which are kept in an internal `WeakMap` (never shown by
-  a dump, `var_export()`, `(array)`, `json_encode()` or `serialize()`).
+  Symfony `Request`. `RbacRequest` carries the method, route name, scheme and host as properties; the path, scalar
+  route parameters, scalar non-internal attributes and the allowlisted headers are kept in an internal `WeakMap`
+  (never shown by a dump, `var_export()`, `(array)`, `json_encode()` or `serialize()`).
 - `RbacBypassVetoInterface::vetoesBypass(RbacActor, ?object)`: the bypass veto without the Symfony `TokenInterface`.
   `RbacActor` carries the user identifier, token roles, reachable roles, impersonator and firewall name; the user
   object and the token attributes are kept in the same internal `WeakMap`.
-- `request_guard.context_headers` (default `[]`): headers copied into the `RbacRequest`; credential, cookie and
-  forwarding headers are refused.
+- `request_guard.context_headers` (default `[]`): headers copied into the `RbacRequest`; credential, cookie, client-IP
+  and forwarding headers are refused.
 - `RbacPortsPass`: the configured context resolver and every tagged bypass veto must implement one of their two ports
   (the build fails otherwise); a service implementing both is called through the new one. No interface alias is
   registered for these SPIs, so `lint:container` passes for new-only, deprecated-only and dual services (kernel test).
@@ -31,6 +31,12 @@ unchanged (exhaustive equivalence matrix against the 1.1.0 voter). See [UPGRADIN
 - `Context\RequestContextResolverInterface` (use `RbacRequestContextResolverInterface`) and
   `Security\BypassVetoInterface` (use `RbacBypassVetoInterface`), removed in 2.0. A service implementing only the
   deprecated interface triggers a build-time deprecation and keeps working as in 1.1.
+
+### Changed
+
+- A service tagged `nowo_rbac_kit.bypass_veto` by hand that implements neither veto interface (a duck-typed `vetoes()`
+  method) now fails the container build, or throws at the first decision when its class is unknown at build time
+  (fail closed). Implement `RbacBypassVetoInterface`.
 
 ## [1.1.0] - 2026-11-11
 

@@ -34,7 +34,7 @@ final class RbacRequestTest extends TestCase
         $request = $this->request();
 
         self::assertSame('GET', $request->method);
-        self::assertSame('/projects/billing', $request->path);
+        self::assertSame('/projects/billing', $request->path());
         self::assertSame('project_show', $request->routeName);
         self::assertSame('https', $request->scheme);
         self::assertSame('app.example.test', $request->host);
@@ -75,6 +75,7 @@ final class RbacRequestTest extends TestCase
 
         self::assertStringNotContainsString(self::SHARE, $dumped);
         self::assertStringNotContainsString(self::TENANT, $dumped);
+        self::assertStringNotContainsString('/projects/', $dumped, 'audit F1: the path may carry a share-link token');
         self::assertStringContainsString('project_show', $dumped, 'the public properties are shown');
     }
 
@@ -87,7 +88,8 @@ final class RbacRequestTest extends TestCase
         self::assertInstanceOf(RbacRequest::class, $copy);
 
         foreach ([$clone, $copy] as $other) {
-            self::assertSame('/projects/billing', $other->path);
+            self::assertSame('', $other->path());
+            self::assertSame('project_show', $other->routeName);
             self::assertNull($other->routeParam('id'));
             self::assertSame([], $other->routeParams());
             self::assertNull($other->attribute('id'));

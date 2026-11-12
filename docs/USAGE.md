@@ -327,17 +327,20 @@ is such a host: a plain domain project, only the new ports, 300 alternating requ
 
 ### Framework-free values (`RbacRequest`, `RbacActor`)
 
-- `RbacRequest` (request guard): public `method`, `path`, `routeName`, `scheme`, `host`; `routeParam()` /
+- `RbacRequest` (request guard): public `method`, `routeName`, `scheme`, `host`; `path()`, `routeParam()` /
   `routeParams()` (scalar route parameters), `attribute()` (scalar request attributes not starting with `_`),
   `header()` (only `request_guard.context_headers`). Object attributes, cookies, the query string, the body and the
   session are never copied: resolve the context from an id.
 - `RbacActor` (bypass vetoes): public `userIdentifier`, `roles`, `reachableRoles`, `impersonatorIdentifier`,
   `firewallName`; `user()` and `tokenAttribute()`.
-- The route parameters, attributes, headers, the user object and the token attributes are not properties: they live in
+- The path, route parameters, attributes, headers, the user object and the token attributes are not properties: they live in
   an internal `WeakMap` keyed by the VO, so `dump()`, `var_export()`, `print_r()`, an `(array)` cast, `json_encode()`
   or `serialize()` of a VO never shows them (a password hash, a share-link token, a credential kept on the token), and
   a clone or an unserialized copy has none (`RbacActor::user()` throws on a copy). Both are built per request or per
-  decision and never stored (worker mode, kernel reset false).
+  decision and never stored (worker mode, kernel reset false). Never keep one in a property of your resolver or veto:
+  it would keep the user object and the token attributes alive into the next request.
+- Headers are client-controlled. Resolve the context from the same source your controller loads data from (usually
+  the route parameter); a tenant header that disagrees with `{projectId}` must not decide the project.
 
 ## Overriding templates
 

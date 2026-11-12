@@ -18,8 +18,8 @@ use function strtolower;
  * Framework-free view of the main request the request guard checks, given to a
  * {@see RbacRequestContextResolverInterface} (since 1.2, REQ-ARCH-001 rule 3: no Symfony `Request` in a public port).
  *
- * Its properties hold only the method, scheme, host, path and route name. The values a resolver reads to find the
- * context are **not** properties: the scalar route parameters ({@see routeParam()}), the scalar request attributes
+ * Its properties hold only the method, scheme, host and route name. The values a resolver reads to find the context are
+ * **not** properties: the path ({@see path()}, it may carry a share-link or reset token), the scalar route parameters ({@see routeParam()}), the scalar request attributes
  * whose name does not start with `_` ({@see attribute()}) and the headers named in `request_guard.context_headers`
  * ({@see header()}, default none; credential and cookie headers are refused by the configuration). They live in an
  * internal {@see \WeakMap} keyed by this object, so a dump, `var_export()`, `(array)` cast, `json_encode()` or
@@ -39,6 +39,9 @@ final readonly class RbacRequest
     /** Bag of the allowlisted headers. */
     private const HEADERS = 'headers';
 
+    /** Bag of the path. */
+    private const PATH = 'path';
+
     /**
      * @param string $method HTTP method (upper case)
      * @param string $path path info (no query string)
@@ -49,7 +52,7 @@ final readonly class RbacRequest
      */
     public function __construct(
         public string $method,
-        public string $path,
+        string $path,
         public ?string $routeName = null,
         public string $scheme = 'https',
         public string $host = '',
@@ -69,7 +72,16 @@ final readonly class RbacRequest
             self::ROUTE      => $this->scalars($routeParams, false),
             self::ATTRIBUTES => $this->scalars($attributes, true),
             self::HEADERS    => $normalizedHeaders,
+            self::PATH       => [self::PATH => $path],
         ]);
+    }
+
+    /** The path info (no query string); an empty string on a clone or an unserialized copy. */
+    public function path(): string
+    {
+        $path = HiddenValues::get($this, self::PATH, self::PATH);
+
+        return is_string($path) ? $path : '';
     }
 
     /** A scalar route parameter (`/projects/{id}` → `routeParam('id')`), or null. */

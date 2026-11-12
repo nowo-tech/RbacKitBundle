@@ -46,7 +46,7 @@ final class ConfigurationTest extends TestCase
         $config = $this->process(['request_guard' => ['context_headers' => [' X-Tenant ', 'x-tenant', 'Accept-Language']]]);
         self::assertSame(['x-tenant', 'accept-language'], $config['request_guard']['context_headers']);
 
-        foreach (['Authorization', 'cookie', 'X-Api-Key', 'x-auth-user', 'x-session-id', 'x-csrf-token', 'x-signature', 'x-password', 'forwarded', 'x-forwarded-for', 'referer', 'bad header', ''] as $header) {
+        foreach (['Authorization', 'cookie', 'X-Api-Key', 'x-auth-user', 'x-session-id', 'x-csrf-token', 'x-signature', 'x-password', 'forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'x-real-ip', 'x-jwt-assertion', 'x-amzn-oidc-data', 'x-credential', 'x-pass', 'ssl-client-cert', 'x-shopify-hmac-sha256', 'x-otp', 'referer', 'bad header', ''] as $header) {
             try {
                 $this->process(['request_guard' => ['context_headers' => [$header]]]);
                 self::fail('accepted: ' . $header);
