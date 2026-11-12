@@ -44,9 +44,10 @@ final class ConfigurationTest extends TestCase
     public function contextHeadersAreNormalisedAndCredentialHeadersRefused(): void
     {
         $config = $this->process(['request_guard' => ['context_headers' => [' X-Tenant ', 'x-tenant', 'Accept-Language']]]);
+        self::assertSame(['x-request-id', 'x-tenant-id', 'x-hosting-region', 'x-viaduct'], $this->process(['request_guard' => ['context_headers' => ['x-request-id', 'x-tenant-id', 'x-hosting-region', 'x-viaduct']]])['request_guard']['context_headers'], 'MX-R-1: anchored names do not over-match');
         self::assertSame(['x-tenant', 'accept-language'], $config['request_guard']['context_headers']);
 
-        foreach (['Authorization', 'cookie', 'X-Api-Key', 'x-auth-user', 'x-session-id', 'x-csrf-token', 'x-signature', 'x-password', 'forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'x-real-ip', 'x-jwt-assertion', 'x-amzn-oidc-data', 'x-credential', 'x-pass', 'ssl-client-cert', 'x-shopify-hmac-sha256', 'x-otp', 'referer', 'bad header', ''] as $header) {
+        foreach (['Authorization', 'cookie', 'X-Api-Key', 'x-auth-user', 'x-session-id', 'x-csrf-token', 'x-signature', 'x-password', 'forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'x-real-ip', 'x-jwt-assertion', 'x-amzn-oidc-data', 'x-credential', 'x-pass', 'ssl-client-cert', 'x-shopify-hmac-sha256', 'x-otp', 'referer', 'true-client-ip', 'cf-connecting-ip', 'x-client-ip', 'client-ip', 'x-cluster-client-ip', 'fastly-client-ip', 'x-original-host', 'x-original-forwarded-for', 'x-envoy-external-address', 'x-envoy-original-path', 'via', 'Via', 'x-host', 'remote-user', 'x-remote-user', 'x-ms-client-principal', 'x-ms-client-principal-name', 'x-ms-client-principal-id', 'x-pomerium-claim-email', 'x-user-email', 'x-ssl-client-dn', 'x-ssl-client-verify', 'x-client-cert-dn', 'x-client-verify', 'dpop', 'DPoP', 'bad header', ''] as $header) {
             try {
                 $this->process(['request_guard' => ['context_headers' => [$header]]]);
                 self::fail('accepted: ' . $header);

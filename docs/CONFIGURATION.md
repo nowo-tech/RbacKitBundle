@@ -174,9 +174,10 @@ container build.
 
 - `context_headers` (1.2, default `[]`): request headers copied into the `RbacRequest` (lower-cased, e.g. `x-tenant`
   for a tenant chosen by header). `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie`, `Forwarded`,
-  `X-Forwarded-*`, `X-Real-IP`, `X-Original-URL`, `X-Rewrite-URL`, `Referer`, `SSL-Client-Cert` and any name containing
-  token, secret, key, auth, session, signature, pass, pwd, cookie, csrf, jwt, bearer, credential, cert, hmac, otp or
-  oidc are refused (configuration error). Cookies, the query string and the body are never copied. Header values are
+  `X-Real-IP`, `X-Rewrite-URL`, `Referer`, `SSL-Client-Cert`, `Via`, `X-Host`, `DPoP`, the `X-Forwarded-*`,
+  `X-Original-*`, `X-Envoy-*`, `X-SSL-*` and `X-Client-*` families, and any name containing token, secret, key, auth,
+  session, signature, pass, pwd, cookie, csrf, jwt, bearer, credential, cert, hmac, otp, oidc, client-ip,
+  connecting-ip, remote-user, client-principal, claim or user-email are refused (configuration error). Cookies, the query string and the body are never copied. Header values are
   client-controlled: never let one override the context your controller reads from the route.
 
 - `skip_strangers: true` leaves strangers and unresolved contexts to the controller (its 404 existence mask);
