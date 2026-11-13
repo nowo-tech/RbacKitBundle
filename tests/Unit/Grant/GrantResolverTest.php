@@ -100,7 +100,7 @@ final class GrantResolverTest extends TestCase
 
             public function log($level, string|Stringable $message, array $context = []): void
             {
-                $this->warnings[] = (string) $level . ' ' . $message . ' ' . (($context['exception'] ?? null) instanceof InvalidAssignmentException ? 'with-exception' : '');
+                $this->warnings[] = $level . ' ' . $message . ' ' . (($context['exception'] ?? null) instanceof InvalidAssignmentException ? 'with-exception' : '');
             }
         };
         $provider = new MapGrantProvider([
