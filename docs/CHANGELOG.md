@@ -3,7 +3,32 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## Table of contents
+
+- [[Unreleased]](#unreleased)
+  - [Security](#security)
+  - [Changed](#changed)
+- [[1.2.0] - 2026-11-12](#120---2026-11-12)
+  - [Added](#added)
+  - [Deprecated](#deprecated)
+  - [Changed](#changed-1)
+- [[1.1.0] - 2026-11-11](#110---2026-11-11)
+  - [Security](#security-1)
+  - [Fixed](#fixed)
+  - [Added](#added-1)
+- [[1.0.0] - 2026-11-02](#100---2026-11-02)
+  - [Added](#added-2)
+  - [Changed (breaking, compared with the audited candidate `8bd695a`)](#changed-breaking-compared-with-the-audited-candidate-8bd695a)
+  - [Security](#security-2)
+
 ## [Unreleased]
+
+### Security
+
+- `ContextId::of()` (and so `Assignment::in()`, `DefaultContextResolver`) now refuses ids with leading or trailing
+  whitespace and ids with control or format characters (including zero-width and bidi marks) or invalid UTF-8: `null`
+  from `of()` (fail closed), `InvalidArgumentException` from `Assignment::in()`. Such ids were accepted before; they only
+  affected in-memory keys (REQ-SEC-006).
 
 ### Changed
 

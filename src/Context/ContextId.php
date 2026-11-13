@@ -24,16 +24,19 @@ final class ContextId
     /** Longest accepted id inside a type. */
     public const ID_MAX_LENGTH = 191;
 
+    /** Refused in an id: leading or trailing whitespace, and control or format characters (Cc, Cf, ...) anywhere. */
+    private const ID_REFUSED_PATTERN = '/^[\s\p{Z}]|[\s\p{Z}]$|\p{C}/u';
+
     /** Separator between the type and the id. */
     public const SEPARATOR = ':';
 
     /**
-     * The typed id of a context, or null when the type or the id is not acceptable (blank or longer than
-     * {@see self::ID_MAX_LENGTH}).
+     * The typed id of a context, or null when the type or the id is not acceptable (blank, longer than
+     * {@see self::ID_MAX_LENGTH}, with edge whitespace, with control or format characters, or not valid UTF-8).
      */
     public static function of(string $type, string $id): ?string
     {
-        if (preg_match(self::TYPE_PATTERN, $type) !== 1 || trim($id) === '' || strlen($id) > self::ID_MAX_LENGTH) {
+        if (preg_match(self::TYPE_PATTERN, $type) !== 1 || trim($id) === '' || strlen($id) > self::ID_MAX_LENGTH || preg_match(self::ID_REFUSED_PATTERN, $id) !== 0) {
             return null;
         }
 
