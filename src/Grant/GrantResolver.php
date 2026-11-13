@@ -20,8 +20,9 @@ use function spl_object_id;
  * ({@see self::reset()}, worker mode); a page with N contexts checks N contexts without N queries.
  *
  * When the provider fails to build an assignment ({@see InvalidAssignmentException}, a stored context id that
- * {@see ContextId::of()} refuses), the user holds nothing in that request and a warning
- * is logged (fail closed); any other exception from the provider propagates.
+ * {@see ContextId::of()} refuses), the user holds no permission set from assignments and no fallback in that request
+ * ({@see self::holdsAnyAssignment()} stays true); `role_grants` and bypass roles still apply, since they come from the
+ * token roles. A warning is logged (fail closed); any other exception from the provider propagates.
  */
 final class GrantResolver implements ResetInterface
 {
@@ -136,10 +137,12 @@ final class GrantResolver implements ResetInterface
             }
         } catch (InvalidAssignmentException $e) {
             // The provider built an Assignment from a stored context id ContextId::of() refuses. The exception ends
-            // the provider's iterable, so the remaining assignments are unknown: the user holds nothing in this request
-            // (fail closed, a denial instead of an error on every check). Any other exception still propagates.
-            $this->logger?->warning('RbacKit: the grant provider failed to build an assignment (refused context id); the user holds no permission set in this request. Check stored ids with ContextId::of() in the provider.', ['exception' => $e]);
-            $grants = ['global' => [], 'contexts' => [], 'any' => false];
+            // the provider's iterable, so the remaining assignments are unknown: the user holds no permission set from
+            // assignments in this request (fail closed, a denial instead of an error on every check). `any` stays true
+            // so the voter's fallback set does not apply either: the user does hold assignments. Any other exception
+            // still propagates.
+            $this->logger?->warning('RbacKit: the grant provider failed to build an assignment (refused context id); the user holds no permission set from assignments and no fallback in this request. Check stored ids with ContextId::of() in the provider.', ['exception' => $e]);
+            $grants = ['global' => [], 'contexts' => [], 'any' => true];
         }
 
         if (count($this->byUser) >= $this->maxUsers) {

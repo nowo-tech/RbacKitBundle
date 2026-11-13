@@ -146,8 +146,8 @@ Return only active memberships (a deactivated membership grants nothing). The re
 request and reads at most `voter.max_assignments` assignments.
 
 When ids come from stored data that may predate 1.2.1, skip the ones `ContextId::of()` refuses instead of building an
-`Assignment` from them: `Assignment::in()` throws `InvalidAssignmentException`, and the resolver then denies the user
-everything for the request (see [UPGRADING](UPGRADING.md#to-121)).
+`Assignment` from them: `Assignment::in()` throws `InvalidAssignmentException`, and the user then has no permission set
+from assignments and no fallback for the request; `role_grants` and bypass roles still apply (see [UPGRADING](UPGRADING.md#to-121)).
 
 ## Permission providers
 

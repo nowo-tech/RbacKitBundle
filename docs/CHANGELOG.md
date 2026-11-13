@@ -33,9 +33,10 @@ All notable changes to this project are documented here. The format follows
   Unicode tables keep working (audit OI-K2). **Stored assignments with such ids must be cleaned:** see
   [UPGRADING](UPGRADING.md#to-121).
 - `Assignment` throws the new `Grant\InvalidAssignmentException` (an `InvalidArgumentException`, existing catch blocks
-  keep working). When a grant provider throws it while building the assignments of a user, `GrantResolver` denies that
-  user everything in the request and logs a warning, instead of erroring out on every permission check (fail closed;
-  audit OI-K1). Any other exception from the provider still propagates.
+  keep working). When a grant provider throws it while building the assignments of a user, that user has no
+  permission set from assignments and no fallback in the request (`role_grants` and bypass roles still apply) and a
+  warning is logged, instead of every permission check erroring out (fail closed; audit OI-K1). Any other exception
+  from the provider still propagates.
 
 ### Changed
 

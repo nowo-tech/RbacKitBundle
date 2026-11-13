@@ -13,7 +13,8 @@ use Nowo\RbacKitBundle\Context\ContextId;
  *
  * Check stored context ids with {@see ContextId::of()} and skip (or clean) those it
  * refuses before building an {@see Assignment}: building one throws {@see InvalidAssignmentException}, and then
- * {@see GrantResolver} denies the user everything in that request.
+ * {@see GrantResolver} gives the user no permission set from assignments and no fallback in that request
+ * (`role_grants` and bypass roles still apply).
  */
 interface GrantProviderInterface
 {

@@ -112,7 +112,7 @@ final class GrantResolverTest extends TestCase
 
         self::assertFalse($grants->grants($alice, 'project:billing', 'project.view'), 'already read assignments are dropped too');
         self::assertFalse($grants->grants($alice, 'project:mobile', 'project.view'));
-        self::assertFalse($grants->holdsAnyAssignment($alice));
+        self::assertTrue($grants->holdsAnyAssignment($alice), 'still holds assignments: no voter fallback set (OI-K1b)');
         self::assertSame([], $grants->contextsGranting($alice, 'summary.view'));
         self::assertSame(1, $provider->calls, 'the denial is memoised for the request');
         self::assertCount(1, $logger->warnings);

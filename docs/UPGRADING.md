@@ -23,9 +23,10 @@ From **1.2.0**: `composer update nowo-tech/rbac-kit-bundle`. No configuration ch
 private-use characters (zero-width and bidi marks included), with U+2028 / U+2029, or that are not valid UTF-8. An
 assignment stored with such an id can no longer be built: `Assignment::in()`, `Assignment::of()` and
 `new Assignment()` throw `Grant\InvalidAssignmentException` (an `InvalidArgumentException`). When your grant provider
-throws it, `GrantResolver` denies that user every permission for the request and logs a warning (fail closed); it no
-longer turns every permission check of the user into an error, but the user still loses access until the data is
-fixed.
+throws it, that user has no permission set from assignments and no fallback (`voter.fallback_permission_set`) for
+the request; `role_grants` and bypass roles still apply, since they come from the token roles. A warning is logged
+(fail closed). Permission checks no longer error out for that user, but the user still loses the access their
+assignments gave until the data is fixed.
 
 **Host `GrantProviderInterface` implementations must check stored ids with `ContextId::of()`** and skip (or clean)
 the ones it refuses before building an `Assignment`:
