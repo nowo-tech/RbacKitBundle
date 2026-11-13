@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.2.1] - 2026-11-13](#121---2026-11-13)
   - [Security](#security)
   - [Changed](#changed)
 - [[1.2.0] - 2026-11-12](#120---2026-11-12)
@@ -22,6 +23,8 @@ All notable changes to this project are documented here. The format follows
   - [Security](#security-2)
 
 ## [Unreleased]
+
+## [1.2.1] - 2026-11-13
 
 ### Security
 
@@ -84,7 +87,6 @@ unchanged (exhaustive equivalence matrix against the 1.1.0 voter). See [UPGRADIN
 ## [1.1.0] - 2026-11-11
 
 Security: authorization memos are cleared at every request, message and command boundary, so a revoked permission is refused in kept-alive workers (GHSA); permission-set writes use DBAL and never flush the host's entity manager. See [UPGRADING](https://github.com/nowo-tech/RbacKitBundle/blob/v1.1.0/docs/UPGRADING.md#to-110).
-
 
 ### Security
 

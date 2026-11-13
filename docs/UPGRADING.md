@@ -3,7 +3,8 @@
 ## Table of contents
 
 - [Unreleased](#unreleased)
-  - [To 1.2.1](#to-121)
+- [To 1.2.1](#to-121)
+  - [To 1.2.1](#to-121-1)
 - [To 1.2.0](#to-120)
 - [To 1.1.0](#to-110)
 - [To 1.0.0](#to-100)
@@ -14,6 +15,14 @@
   - [From the audited candidate 8bd695a](#from-the-audited-candidate-8bd695a)
 
 ## Unreleased
+
+## To 1.2.1
+
+From **1.2.0**:
+
+```bash
+composer update nowo-tech/rbac-kit-bundle
+```
 
 ### To 1.2.1
 
