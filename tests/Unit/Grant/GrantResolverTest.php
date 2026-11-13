@@ -10,7 +10,9 @@ use Nowo\RbacKitBundle\Context\DefaultContextResolver;
 use Nowo\RbacKitBundle\Context\NullRequestContextResolver;
 use Nowo\RbacKitBundle\Context\RbacRequest;
 use Nowo\RbacKitBundle\Grant\Assignment;
+use Nowo\RbacKitBundle\Grant\GrantProviderInterface;
 use Nowo\RbacKitBundle\Grant\GrantResolver;
+use Nowo\RbacKitBundle\Grant\InvalidAssignmentException;
 use Nowo\RbacKitBundle\Grant\NullGrantProvider;
 use Nowo\RbacKitBundle\Tests\Fixtures\MapGrantProvider;
 use Nowo\RbacKitBundle\Tests\Fixtures\Project;
@@ -18,6 +20,7 @@ use Nowo\RbacKitBundle\Tests\Support\Catalogues;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\AbstractLogger;
+use RuntimeException;
 use stdClass;
 use Stringable;
 use Symfony\Component\HttpFoundation\Request;
@@ -83,6 +86,69 @@ final class GrantResolverTest extends TestCase
         self::assertSame(3, $provider->calls, 'the memo keeps one user');
     }
 
+    /**
+     * Audit OI-K1: a stored context id that ContextId::of() refuses makes the provider throw while building the
+     * Assignment; the resolver denies everything for that user (fail closed) and logs a warning instead of erroring
+     * out on every permission check. Other provider errors still propagate.
+     */
+    #[Test]
+    public function anAssignmentTheProviderFailsToBuildDeniesTheUserInsteadOfErroring(): void
+    {
+        $logger = new class extends AbstractLogger {
+            /** @var list<string> */
+            public array $warnings = [];
+
+            public function log($level, string|Stringable $message, array $context = []): void
+            {
+                $this->warnings[] = (string) $level . ' ' . $message . ' ' . (($context['exception'] ?? null) instanceof InvalidAssignmentException ? 'with-exception' : '');
+            }
+        };
+        $provider = new MapGrantProvider([
+            'alice' => [['viewer', 'billing'], ['triage', "legacy\u{2028}id"], ['viewer', 'mobile']],
+            'bob'   => [['auditor', null]],
+        ]);
+        $grants = new GrantResolver($provider, Catalogues::registry(), logger: $logger);
+        $alice  = new InMemoryUser('alice', null);
+
+        self::assertFalse($grants->grants($alice, 'project:billing', 'project.view'), 'already read assignments are dropped too');
+        self::assertFalse($grants->grants($alice, 'project:mobile', 'project.view'));
+        self::assertFalse($grants->holdsAnyAssignment($alice));
+        self::assertSame([], $grants->contextsGranting($alice, 'summary.view'));
+        self::assertSame(1, $provider->calls, 'the denial is memoised for the request');
+        self::assertCount(1, $logger->warnings);
+        self::assertStringStartsWith('warning RbacKit: the grant provider failed to build an assignment', $logger->warnings[0]);
+        self::assertStringEndsWith('with-exception', $logger->warnings[0]);
+
+        self::assertTrue($grants->grantsGlobally(new InMemoryUser('bob', null), 'reports.export'), 'other users are unaffected');
+
+        $failing = new class implements GrantProviderInterface {
+            public function assignmentsOf(object $user): iterable
+            {
+                throw new InvalidArgumentException('database row is broken');
+            }
+        };
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('database row is broken');
+        (new GrantResolver($failing, Catalogues::registry()))->grants($alice, 'project:billing', 'project.view');
+    }
+
+    #[Test]
+    public function aProviderRuntimeErrorPropagates(): void
+    {
+        $failing = new class implements GrantProviderInterface {
+            public function assignmentsOf(object $user): iterable
+            {
+                yield Assignment::global('auditor');
+
+                throw new RuntimeException('connection lost');
+            }
+        };
+
+        $this->expectException(RuntimeException::class);
+        (new GrantResolver($failing, Catalogues::registry()))->grantsGlobally(new InMemoryUser('bob', null), 'reports.export');
+    }
+
     #[Test]
     public function userKeysAreStable(): void
     {
@@ -129,6 +195,7 @@ final class GrantResolverTest extends TestCase
             self::fail('untyped');
         } catch (InvalidArgumentException $e) {
             self::assertStringContainsString('must be typed', $e->getMessage());
+            self::assertInstanceOf(InvalidAssignmentException::class, $e, 'still an InvalidArgumentException, now typed');
         }
 
         $this->expectException(InvalidArgumentException::class);

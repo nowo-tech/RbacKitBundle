@@ -26,9 +26,16 @@ All notable changes to this project are documented here. The format follows
 ### Security
 
 - `ContextId::of()` (and so `Assignment::in()`, `DefaultContextResolver`) now refuses ids with leading or trailing
-  whitespace and ids with control or format characters (including zero-width and bidi marks) or invalid UTF-8: `null`
-  from `of()` (fail closed), `InvalidArgumentException` from `Assignment::in()`. Such ids were accepted before; they only
-  affected in-memory keys (REQ-SEC-006).
+  whitespace and ids with control, format, surrogate or private-use characters (Cc, Cf, Cs, Co: including zero-width
+  and bidi marks), the line and paragraph separators U+2028 / U+2029 anywhere, or invalid UTF-8: `null` from `of()`
+  (fail closed), `InvalidArgumentException` from `Assignment::in()`. Such ids were accepted before; they only affected
+  in-memory keys (REQ-SEC-006). Unassigned code points (Cn) are not refused, so emoji newer than the host's PCRE
+  Unicode tables keep working (audit OI-K2). **Stored assignments with such ids must be cleaned:** see
+  [UPGRADING](UPGRADING.md#to-121).
+- `Assignment` throws the new `Grant\InvalidAssignmentException` (an `InvalidArgumentException`, existing catch blocks
+  keep working). When a grant provider throws it while building the assignments of a user, `GrantResolver` denies that
+  user everything in the request and logs a warning, instead of erroring out on every permission check (fail closed;
+  audit OI-K1). Any other exception from the provider still propagates.
 
 ### Changed
 

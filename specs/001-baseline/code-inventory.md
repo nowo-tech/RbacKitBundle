@@ -4,7 +4,7 @@
 **Package**: `nowo-tech/rbac-kit-bundle`  
 **Last audited**: 2026-11-13
 
-Scope: every file under `src/`. Audit command: `find src -type f | wc -l` → **79**.
+Scope: every file under `src/`. Audit command: `find src -type f | wc -l` → **80**.
 
 ## Bundle and dependency injection
 
@@ -63,6 +63,7 @@ Scope: every file under `src/`. Audit command: `find src -type f | wc -l` → **
 | `src/Grant/Assignment.php` | Grants and contexts | FR-GRT-001 |
 | `src/Grant/GrantProviderInterface.php` | Grants and contexts | FR-GRT-001 |
 | `src/Grant/GrantResolver.php` | Grants and contexts | FR-GRT-002 |
+| `src/Grant/InvalidAssignmentException.php` | Grants and contexts | FR-GRT-001 |
 | `src/Grant/NullGrantProvider.php` | Grants and contexts | FR-GRT-001 |
 | `src/Http/RbacRequestFactory.php` | Grants and contexts | FR-CTX-002 |
 | `src/Internal/HiddenValues.php` | Grants and contexts | FR-CTX-002, FR-SEC-002 |
@@ -137,12 +138,12 @@ Scope: every file under `src/`. Audit command: `find src -type f | wc -l` → **
 | Bundle and dependency injection | 8 |
 | Catalogue | 5 |
 | Permission sets | 14 |
-| Grants and contexts | 14 |
+| Grants and contexts | 15 |
 | Voter and entry points | 12 |
 | Coverage | 3 |
 | Admin UI security | 5 |
 | Admin UI (HTTP, forms, view models, Twig) | 11 |
 | Translations | 7 |
-| **Total production sources** | **79** |
+| **Total production sources** | **80** |
 
-Mapped 79 / 79 files under `src/` (100%). No generated or build output is shipped under `src/`.
+Mapped 80 / 80 files under `src/` (100%). No generated or build output is shipped under `src/`.
