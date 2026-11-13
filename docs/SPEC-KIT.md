@@ -206,7 +206,7 @@ find src config -type f | wc -l
 
 The **Total production sources** row in `code-inventory.md` must match this count.
 
-In **RbacKitBundle**, the baseline inventory covers **79/79** files under `src/` (63 PHP, 7 translation catalogues, 9 Twig views; route import through the bundle loader, no `config/` files) — see [`specs/001-baseline/code-inventory.md`](../specs/001-baseline/code-inventory.md).
+In **RbacKitBundle**, the baseline inventory covers **80/80** files under `src/` (69 PHP, 7 translation catalogues, 4 Twig views; route import through the bundle loader, no `config/` files) — see [`specs/001-baseline/code-inventory.md`](../specs/001-baseline/code-inventory.md).
 
 ---
 

@@ -24,16 +24,24 @@ final class ContextId
     /** Longest accepted id inside a type. */
     public const ID_MAX_LENGTH = 191;
 
+    /**
+     * Refused in an id: leading or trailing whitespace; anywhere, control, format, surrogate and private-use characters
+     * (Cc, Cf, Cs, Co) and the line and paragraph separators U+2028 / U+2029. Unassigned code points (Cn) are not
+     * refused, so an emoji newer than the PCRE Unicode tables is accepted.
+     */
+    private const ID_REFUSED_PATTERN = '/^[\s\p{Z}]|[\s\p{Z}]$|[\p{Cc}\p{Cf}\p{Cs}\p{Co}\x{2028}\x{2029}]/u';
+
     /** Separator between the type and the id. */
     public const SEPARATOR = ':';
 
     /**
-     * The typed id of a context, or null when the type or the id is not acceptable (blank or longer than
-     * {@see self::ID_MAX_LENGTH}).
+     * The typed id of a context, or null when the type or the id is not acceptable (blank, longer than
+     * {@see self::ID_MAX_LENGTH}, with edge whitespace, with control, format, surrogate or private-use characters or
+     * U+2028 / U+2029, or not valid UTF-8).
      */
     public static function of(string $type, string $id): ?string
     {
-        if (preg_match(self::TYPE_PATTERN, $type) !== 1 || trim($id) === '' || strlen($id) > self::ID_MAX_LENGTH) {
+        if (preg_match(self::TYPE_PATTERN, $type) !== 1 || trim($id) === '' || strlen($id) > self::ID_MAX_LENGTH || preg_match(self::ID_REFUSED_PATTERN, $id) !== 0) {
             return null;
         }
 

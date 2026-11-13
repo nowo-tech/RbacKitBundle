@@ -2,15 +2,17 @@
 
 **Baseline spec**: [`spec.md`](spec.md)  
 **Package**: `nowo-tech/rbac-kit-bundle`  
-**Last audited**: 2026-11-01
+**Last audited**: 2026-11-13
 
-Scope: every file under `src/`. Audit command: `find src -type f | wc -l` → **65**.
+Scope: every file under `src/`. Audit command: `find src -type f | wc -l` → **80**.
 
 ## Bundle and dependency injection
 
 | Source file | Spec section | Requirement IDs |
 | --- | --- | --- |
 | `src/DependencyInjection/Compiler/CsrfProtectionPass.php` | Bundle and dependency injection | FR-SEC-002 |
+| `src/DependencyInjection/Compiler/RbacEntityManagerPass.php` | Bundle and dependency injection | FR-BUNDLE-001 |
+| `src/DependencyInjection/Compiler/RbacPortsPass.php` | Bundle and dependency injection | FR-BUNDLE-001 |
 | `src/DependencyInjection/Compiler/TwigPathsPass.php` | Bundle and dependency injection | FR-BUNDLE-001, FR-UI-004 |
 | `src/DependencyInjection/Compiler/UnauthenticatedAccessPass.php` | Bundle and dependency injection | FR-SEC-002 |
 | `src/DependencyInjection/Configuration.php` | Bundle and dependency injection | FR-BUNDLE-001, FR-SEC-002 |
@@ -39,10 +41,12 @@ Scope: every file under `src/`. Audit command: `find src -type f | wc -l` → **
 | `src/PermissionSet/PermissionSet.php` | Permission sets | FR-SET-001 |
 | `src/PermissionSet/PermissionSetException.php` | Permission sets | FR-SET-004 |
 | `src/PermissionSet/PermissionSetManager.php` | Permission sets | FR-SET-004 |
+| `src/PermissionSet/PermissionSetManagerInterface.php` | Permission sets | FR-SET-003 |
 | `src/PermissionSet/PermissionSetRegistry.php` | Permission sets | FR-SET-002 |
 | `src/PermissionSet/PermissionSetStorageInterface.php` | Permission sets | FR-SET-003 |
 | `src/PermissionSet/PermissionSetUsageInterface.php` | Permission sets | FR-SET-004 |
 | `src/PermissionSet/StoredPermissionSet.php` | Permission sets | FR-SET-001 |
+| `src/Persistence/OwnEntityManagerSubscriber.php` | Permission sets | FR-SET-003 |
 
 ## Grants and contexts
 
@@ -53,22 +57,32 @@ Scope: every file under `src/`. Audit command: `find src -type f | wc -l` → **
 | `src/Context/DefaultContextResolver.php` | Grants and contexts | FR-CTX-001 |
 | `src/Context/NullRequestContextResolver.php` | Grants and contexts | FR-CTX-002 |
 | `src/Context/RbacContextInterface.php` | Grants and contexts | FR-CTX-001 |
+| `src/Context/RbacRequest.php` | Grants and contexts | FR-CTX-002 |
+| `src/Context/RbacRequestContextResolverInterface.php` | Grants and contexts | FR-CTX-002 |
 | `src/Context/RequestContextResolverInterface.php` | Grants and contexts | FR-CTX-002 |
 | `src/Grant/Assignment.php` | Grants and contexts | FR-GRT-001 |
 | `src/Grant/GrantProviderInterface.php` | Grants and contexts | FR-GRT-001 |
 | `src/Grant/GrantResolver.php` | Grants and contexts | FR-GRT-002 |
+| `src/Grant/InvalidAssignmentException.php` | Grants and contexts | FR-GRT-001 |
 | `src/Grant/NullGrantProvider.php` | Grants and contexts | FR-GRT-001 |
+| `src/Http/RbacRequestFactory.php` | Grants and contexts | FR-CTX-002 |
+| `src/Internal/HiddenValues.php` | Grants and contexts | FR-CTX-002, FR-SEC-002 |
 
 ## Voter and entry points
 
 | Source file | Spec section | Requirement IDs |
 | --- | --- | --- |
 | `src/EventListener/PermissionRequestListener.php` | Voter and entry points | FR-GRD-001 |
+| `src/EventListener/RbacMemoResetListener.php` | Voter and entry points | FR-VOT-001 |
 | `src/Menu/RbacMenuPermissionChecker.php` | Voter and entry points | FR-MNU-001 |
 | `src/Security/BypassVetoInterface.php` | Voter and entry points | FR-VOT-002 |
 | `src/Security/PermissionChecker.php` | Voter and entry points | FR-CHK-001 |
+| `src/Security/PermissionCheckerInterface.php` | Voter and entry points | FR-VOT-001 |
 | `src/Security/PermissionGateInterface.php` | Voter and entry points | FR-VOT-002 |
 | `src/Security/PermissionVoter.php` | Voter and entry points | FR-VOT-001 |
+| `src/Security/RbacActor.php` | Voter and entry points | FR-VOT-001 |
+| `src/Security/RbacActorFactory.php` | Voter and entry points | FR-VOT-001 |
+| `src/Security/RbacBypassVetoInterface.php` | Voter and entry points | FR-VOT-001 |
 | `src/Twig/RbacTwigExtension.php` | Voter and entry points | FR-CHK-001 |
 
 ## Coverage
@@ -121,15 +135,15 @@ Scope: every file under `src/`. Audit command: `find src -type f | wc -l` → **
 
 | Category | Files |
 | --- | --- |
-| Bundle and dependency injection | 6 |
+| Bundle and dependency injection | 8 |
 | Catalogue | 5 |
-| Permission sets | 12 |
-| Grants and contexts | 10 |
-| Voter and entry points | 7 |
+| Permission sets | 14 |
+| Grants and contexts | 15 |
+| Voter and entry points | 12 |
 | Coverage | 3 |
 | Admin UI security | 5 |
 | Admin UI (HTTP, forms, view models, Twig) | 11 |
 | Translations | 7 |
-| **Total production sources** | **66** |
+| **Total production sources** | **80** |
 
-Mapped 66 / 66 files under `src/` (100%). No generated or build output is shipped under `src/`.
+Mapped 80 / 80 files under `src/` (100%). No generated or build output is shipped under `src/`.

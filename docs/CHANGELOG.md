@@ -3,7 +3,40 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## Table of contents
+
+- [[Unreleased]](#unreleased)
+  - [Security](#security)
+  - [Changed](#changed)
+- [[1.2.0] - 2026-11-12](#120---2026-11-12)
+  - [Added](#added)
+  - [Deprecated](#deprecated)
+  - [Changed](#changed-1)
+- [[1.1.0] - 2026-11-11](#110---2026-11-11)
+  - [Security](#security-1)
+  - [Fixed](#fixed)
+  - [Added](#added-1)
+- [[1.0.0] - 2026-11-02](#100---2026-11-02)
+  - [Added](#added-2)
+  - [Changed (breaking, compared with the audited candidate `8bd695a`)](#changed-breaking-compared-with-the-audited-candidate-8bd695a)
+  - [Security](#security-2)
+
 ## [Unreleased]
+
+### Security
+
+- `ContextId::of()` (and so `Assignment::in()`, `DefaultContextResolver`) now refuses ids with leading or trailing
+  whitespace and ids with control, format, surrogate or private-use characters (Cc, Cf, Cs, Co: including zero-width
+  and bidi marks), the line and paragraph separators U+2028 / U+2029 anywhere, or invalid UTF-8: `null` from `of()`
+  (fail closed), `InvalidArgumentException` from `Assignment::in()`. Such ids were accepted before; they only affected
+  in-memory keys (REQ-SEC-006). Unassigned code points (Cn) are not refused, so emoji newer than the host's PCRE
+  Unicode tables keep working (audit OI-K2). **Stored assignments with such ids must be cleaned:** see
+  [UPGRADING](UPGRADING.md#to-121).
+- `Assignment` throws the new `Grant\InvalidAssignmentException` (an `InvalidArgumentException`, existing catch blocks
+  keep working). When a grant provider throws it while building the assignments of a user, that user has no
+  permission set from assignments and no fallback in the request (`role_grants` and bypass roles still apply) and a
+  warning is logged, instead of every permission check erroring out (fail closed; audit OI-K1). Any other exception
+  from the provider still propagates.
 
 ### Changed
 

@@ -3,6 +3,7 @@
 ## Table of contents
 
 - [Unreleased](#unreleased)
+  - [To 1.2.1](#to-121)
 - [To 1.2.0](#to-120)
 - [To 1.1.0](#to-110)
 - [To 1.0.0](#to-100)
@@ -13,6 +14,58 @@
   - [From the audited candidate 8bd695a](#from-the-audited-candidate-8bd695a)
 
 ## Unreleased
+
+### To 1.2.1
+
+From **1.2.0**: `composer update nowo-tech/rbac-kit-bundle`. No configuration change.
+
+`ContextId::of()` now refuses context ids with leading or trailing whitespace, with control, format, surrogate or
+private-use characters (zero-width and bidi marks included), with U+2028 / U+2029, or that are not valid UTF-8. An
+assignment stored with such an id can no longer be built: `Assignment::in()`, `Assignment::of()` and
+`new Assignment()` throw `Grant\InvalidAssignmentException` (an `InvalidArgumentException`). When your grant provider
+throws it, that user has no permission set from assignments and no fallback (`voter.fallback_permission_set`) for
+the request; `role_grants` and bypass roles still apply, since they come from the token roles. A warning is logged
+(fail closed). Permission checks no longer error out for that user, but the user still loses the access their
+assignments gave until the data is fixed.
+
+**Host `GrantProviderInterface` implementations must check stored ids with `ContextId::of()`** and skip (or clean)
+the ones it refuses before building an `Assignment`:
+
+```php
+foreach ($rows as $row) {
+    if ($row['context_type'] === null) {
+        yield Assignment::global($row['permission_set']);
+        continue;
+    }
+    if (ContextId::of($row['context_type'], $row['context_id']) === null) {
+        $this->logger->warning('Skipping a membership with a refused context id.', ['membership' => $row['id']]);
+        continue;
+    }
+    yield Assignment::in($row['permission_set'], $row['context_type'], $row['context_id']);
+}
+```
+
+Detection (adapt the table and columns to your schema). The exact check is `ContextId::of()`, run once over the stored
+rows:
+
+```php
+foreach ($connection->iterateAssociative('SELECT id, context_type, context_id FROM membership WHERE context_id IS NOT NULL') as $row) {
+    if (ContextId::of($row['context_type'], $row['context_id']) === null) {
+        echo $row['id'], "\n";
+    }
+}
+```
+
+A MySQL 8 (ICU regular expressions) prefilter for the same rows:
+
+```sql
+SELECT id, context_type, context_id
+FROM membership
+WHERE context_id IS NOT NULL
+  AND (TRIM(context_id) = ''
+       OR LENGTH(context_id) > 191
+       OR context_id REGEXP '^[\\s\\p{Z}]|[\\s\\p{Z}]$|[\\p{Cc}\\p{Cf}\\p{Co}\\x{2028}\\x{2029}]');
+```
 
 ## To 1.2.0
 

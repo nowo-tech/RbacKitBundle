@@ -227,6 +227,22 @@ final class PermissionVoterTest extends TestCase
         self::assertSame(VoterInterface::ACCESS_DENIED, $this->voter()->vote($this->token('newcomer'), null, ['permission:summary.view']), 'no fallback by default');
     }
 
+    /**
+     * Audit OI-K1b: a user whose grant provider failed to build an assignment (refused stored context id) gets no
+     * permission set from assignments and not the fallback set either; role grants and bypass roles still apply.
+     */
+    #[Test]
+    public function aProviderFailureGrantsNoFallbackSet(): void
+    {
+        $this->provider = new MapGrantProvider(['broken' => [['viewer', "legacy\u{2028}id"]]]);
+        $voter          = $this->voter(bypassRoles: ['ROLE_SUPER'], roleGrants: ['ROLE_REPORTER' => ['reports.export']], fallbackSet: 'viewer');
+
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($this->token('broken'), null, ['permission:summary.view']), 'no fallback after the failure');
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($this->token('newcomer'), null, ['permission:summary.view']), 'the fallback still covers users without assignments');
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($this->token('broken', ['ROLE_REPORTER']), null, ['permission:reports.export']), 'role grants still apply');
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($this->token('broken', ['ROLE_SUPER']), new Project('any'), ['permission:project.settings.view']), 'bypass roles still apply');
+    }
+
     #[Test]
     public function roleGrantsAndBypassRolesFollowTheHierarchy(): void
     {
