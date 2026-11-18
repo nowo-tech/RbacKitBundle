@@ -3,6 +3,7 @@
 ## Table of contents
 
 - [Unreleased](#unreleased)
+- [To 1.3.0](#to-130)
 - [To 1.2.1](#to-121)
   - [To 1.2.1](#to-121-1)
 - [To 1.2.0](#to-120)
@@ -15,6 +16,14 @@
   - [From the audited candidate 8bd695a](#from-the-audited-candidate-8bd695a)
 
 ## Unreleased
+
+## To 1.3.0
+
+From **1.2.1**:
+
+```bash
+composer update nowo-tech/rbac-kit-bundle
+```
 
 From **1.2.x**: `composer update nowo-tech/rbac-kit-bundle --with-dependencies`. No database migration: the table
 `rbac_permission_set` is unchanged. See [CONCURRENCY.md](CONCURRENCY.md).

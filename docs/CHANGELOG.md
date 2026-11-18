@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.3.0] - 2026-11-18](#130---2026-11-18)
   - [Added](#added)
   - [Changed](#changed)
   - [Fixed](#fixed)
@@ -27,7 +28,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-REQ-RUNTIME-003 (concurrency). See [CONCURRENCY](CONCURRENCY.md) and [UPGRADING](UPGRADING.md#unreleased).
+## [1.3.0] - 2026-11-18
+
+REQ-RUNTIME-003 (concurrency). See [CONCURRENCY](CONCURRENCY.md) and [UPGRADING](UPGRADING.md#to-130).
 
 ### Added
 
