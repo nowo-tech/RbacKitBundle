@@ -21,6 +21,7 @@ it, nobody holds a set, the admin UI and the request guard are off.
 - [Security](#security)
 - [Profiles](#profiles)
 - [Timeouts and blocking work](#timeouts-and-blocking-work)
+- [Conflict response](#conflict-response)
 - [Translations](#translations)
 
 ## Full reference
@@ -85,6 +86,9 @@ nowo_rbac_kit:
         manage_roles: [ROLE_ADMIN]        # create / edit / delete (independent of access_roles); never empty
         access_checker: ~                 # RbacAdminAccessCheckerInterface service id
         allow_unauthenticated: false      # DEV / DEMO only: refused without kernel.debug
+    conflict_response:                    # 1.3 (REQ-RUNTIME-003): lock conflict on the admin pages
+        status: ~                         # 409 | 503; null = transaction-doctrine's conflict_response, else 409
+        retry_after: ~                    # Retry-After of a CONFLICT_001 answer; null = transaction-doctrine's, else 1
 ```
 
 ## Catalogue
@@ -151,7 +155,8 @@ refused by the voter, and `Assignment` throws on one.
 | Type | Behaviour |
 | --- | --- |
 | `config` (default) | Read-only: only the configured sets; the admin UI lists them without create / edit / delete. |
-| `doctrine` | Entity `PermissionSetRecord`, table `rbac_permission_set` (+ `doctrine.table_prefix`, unique code). Needs `doctrine/orm` and `doctrine/doctrine-bundle`; the mapping is prepended (on `doctrine.entity_manager` when set, 1.1: that manager only). Writes are DBAL statements (no `flush()`, SAVEPOINT inside an open transaction). Create the table with a migration. |
+| `doctrine` | Entity `PermissionSetRecord`, table `rbac_permission_set` (+ `doctrine.table_prefix`, unique code). Needs `doctrine/orm` and `doctrine/doctrine-bundle`; the mapping is prepended (on `doctrine.entity_manager` when set, 1.1: that manager only). Writes are DBAL statements (no `flush()`, SAVEPOINT inside an open transaction, else its own transaction); creates rely on the unique code and edits on a row lock plus the row's revision (1.3, [CONCURRENCY.md](CONCURRENCY.md)). Create the table with a migration. |
+| `service` + `ConditionalPermissionSetStorageInterface` | 1.3: implement `insert()` and `replace()` too and the manager never overwrites a row it did not read; a plain `PermissionSetStorageInterface` keeps the 1.2 `save()` behaviour. |
 | `service` | Your `PermissionSetStorageInterface` service (`storage.service`). |
 
 The stored rows are read once per request and cached in `cache_pool` (whole table, invalidated after every change on
@@ -246,6 +251,16 @@ The bundle starts no subprocess and makes no outbound HTTP call. Its work is bou
 | Grants | one provider call per user, `voter.max_assignments` assignments, 64 users memoised. |
 | Decisions | 2048 memoised per request (cleared when full). |
 | Admin pages | the list and the catalogue are bounded by `max_sets` and `max_permissions`. |
+| Row locks | one row per edit (`SELECT … FOR UPDATE`), no I/O while held; PostgreSQL `lock_timeout` 5 s on the bundle's own transactions, MySQL / MariaDB `innodb_lock_wait_timeout`. |
+
+## Conflict response
+
+1.3 (REQ-RUNTIME-003 rule 6). A deadlock, lock wait timeout or serialization failure on an admin page (the bundle's
+controllers only) answers `conflict_response.status` (**409** by default) through the application's error page, with
+`X-Conflict-Code: CONFLICT_001` and `Retry-After` when nothing was committed, or `X-Conflict-Code: CONFLICT_002` and
+no `Retry-After` when part of the request may be committed. Set `status: 503` to keep a 503. With both keys null the
+answer follows `nowo_transaction_doctrine.conflict_response` when nowo-tech/transaction-doctrine's bundle is
+registered. Details: [CONCURRENCY.md](CONCURRENCY.md).
 
 ## Translations
 

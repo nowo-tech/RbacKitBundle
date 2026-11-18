@@ -6,23 +6,66 @@ All notable changes to this project are documented here. The format follows
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+  - [Added](#added)
+  - [Changed](#changed)
+  - [Fixed](#fixed)
 - [[1.2.1] - 2026-11-13](#121---2026-11-13)
   - [Security](#security)
-  - [Changed](#changed)
-- [[1.2.0] - 2026-11-12](#120---2026-11-12)
-  - [Added](#added)
-  - [Deprecated](#deprecated)
   - [Changed](#changed-1)
+- [[1.2.0] - 2026-11-12](#120---2026-11-12)
+  - [Added](#added-1)
+  - [Deprecated](#deprecated)
+  - [Changed](#changed-2)
 - [[1.1.0] - 2026-11-11](#110---2026-11-11)
   - [Security](#security-1)
-  - [Fixed](#fixed)
-  - [Added](#added-1)
-- [[1.0.0] - 2026-11-02](#100---2026-11-02)
+  - [Fixed](#fixed-1)
   - [Added](#added-2)
+- [[1.0.0] - 2026-11-02](#100---2026-11-02)
+  - [Added](#added-3)
   - [Changed (breaking, compared with the audited candidate `8bd695a`)](#changed-breaking-compared-with-the-audited-candidate-8bd695a)
   - [Security](#security-2)
 
 ## [Unreleased]
+
+REQ-RUNTIME-003 (concurrency). See [CONCURRENCY](CONCURRENCY.md) and [UPGRADING](UPGRADING.md#unreleased).
+
+### Added
+
+- `ConditionalPermissionSetStorageInterface` (`insert()`, `replace()`): a storage that writes only when the row is
+  still what the manager read. `DoctrinePermissionSetStorage` implements it: creates rely on the unique code, edits
+  lock the row (`SELECT … FOR UPDATE`) and compare its revision.
+- `StoredPermissionSet::revision()` and `PermissionSet::$revision` (a hash of the stored row; null when not stored),
+  `PermissionSet::UNSTORED`, `PermissionSetManager::updateRevision()` and `PermissionSetException::STALE`. The edit
+  form carries the revision in a hidden `revision` field; a set changed since the form was loaded is refused with a
+  409 (`X-Error-Code: RBAC_PERMISSION_SET_STALE`) and the page shows the current version. Translations `error.stale`
+  in the 7 locales.
+- `conflict_response.status` (409 or 503) and `conflict_response.retry_after`: the answer of a lock conflict on the
+  admin pages (default: transaction-doctrine's configuration, else 409 and 1 s).
+- `docs/CONCURRENCY.md`: write paths, controls, conflict codes, host options and residual risks.
+- CI: the database job runs MySQL 8.4, MariaDB 11.4 and PostgreSQL 16 on DBAL 3 and 4, with two-connection race tests.
+
+### Changed
+
+- A deadlock, lock wait timeout or serialization failure on an admin page answers **409** with
+  `X-Conflict-Code: CONFLICT_001` and `Retry-After` (or `CONFLICT_002` and no `Retry-After` when the request already
+  committed something) instead of a 500. Unique violations and lost connections are not mapped.
+- Requires `nowo-tech/transaction-doctrine` ^1.6 and `nowo-tech/transaction-contract` ^1.0 (and so `doctrine/dbal`).
+  Doctrine writes run in transaction-doctrine's runner (`forConnection()`: no entity manager is flushed, cleared or
+  reset); inside the host's transaction they still use a SAVEPOINT. On PostgreSQL the bundle's own transactions set
+  `lock_timeout` to 5 s.
+- `DoctrinePermissionSetStorage::save()` inserts first and updates on the unique violation, instead of
+  SELECT-then-INSERT/UPDATE.
+
+### Fixed
+
+- Two concurrent creates of the same code no longer fail with a 500 or silently replace the first set: the second one
+  gets `code_taken`.
+- An edit no longer undoes a newer edit of the same set. Before, a form opened before another manager revoked a
+  permission granted it again on save, and a truly concurrent save was not even listed as `added` in its
+  `PermissionSetChangedEvent`. Two first edits of a system set no longer overwrite each other.
+- An edit racing a delete no longer re-creates the deleted set.
+- PostgreSQL with DBAL 3: inserting a permission set no longer fails with a not-null violation on `id`. DBAL 3 maps
+  the generated id to a sequence there; the DBAL insert (since 1.1) now takes the next value of that sequence.
 
 ## [1.2.1] - 2026-11-13
 

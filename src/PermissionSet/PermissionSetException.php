@@ -39,6 +39,12 @@ final class PermissionSetException extends DomainException
     /** No usage provider: whether the set is still assigned is unknown, so it cannot be deleted. */
     public const USAGE_UNKNOWN = 'usage_unknown';
 
+    /**
+     * The set changed since the editor read it (1.3, REQ-RUNTIME-003 rule 4): another manager saved it, or created
+     * the first edit of a system set, meanwhile. Nothing was written; reload the set and apply the change again.
+     */
+    public const STALE = 'stale';
+
     /** No set with this code. */
     public const NOT_FOUND = 'not_found';
 

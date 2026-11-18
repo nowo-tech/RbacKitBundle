@@ -15,6 +15,7 @@ use Nowo\RbacKitBundle\Controller\PermissionSetController;
 use Nowo\RbacKitBundle\Coverage\PermissionCoverage;
 use Nowo\RbacKitBundle\Doctrine\TablePrefixListener;
 use Nowo\RbacKitBundle\EventListener\PermissionRequestListener;
+use Nowo\RbacKitBundle\EventListener\PermissionSetConflictListener;
 use Nowo\RbacKitBundle\EventListener\RbacAdminAccessListener;
 use Nowo\RbacKitBundle\EventListener\RbacMemoResetListener;
 use Nowo\RbacKitBundle\Form\PermissionSetType;
@@ -47,6 +48,7 @@ use Nowo\RbacKitBundle\Twig\RbacTwigExtension;
 use Nowo\RbacKitBundle\Ui\ActionForms;
 use Nowo\RbacKitBundle\Ui\RbacPageFactory;
 use Nowo\RbacKitBundle\Ui\RbacPages;
+use Nowo\TransactionDoctrine\Symfony\Conflict\ConflictResponsePolicy;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\DependencyInjection\Argument\TaggedIteratorArgument;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -377,7 +379,7 @@ final class NowoRbacKitExtension extends Extension implements PrependExtensionIn
      */
     private function registerWebUi(ContainerBuilder $container, array $config): void
     {
-        /** @var array{catalogue: array{translation_domain: string}, storage: array{usage_provider: string|null}, web_ui: array{enabled: bool, path_prefix: string, layout_template: string|null, templates: array<string, string>}} $config */
+        /** @var array{catalogue: array{translation_domain: string}, storage: array{usage_provider: string|null}, web_ui: array{enabled: bool, path_prefix: string, layout_template: string|null, templates: array<string, string>}, conflict_response: array{status: int|null, retry_after: int|null}} $config */
         $webUi = $config['web_ui'];
         $container->setDefinition(RbacRouteLoader::class, (new Definition(RbacRouteLoader::class, [$webUi['enabled'], $webUi['path_prefix']]))
             ->addTag('routing.loader'));
@@ -395,6 +397,16 @@ final class NowoRbacKitExtension extends Extension implements PrependExtensionIn
             new Reference(RbacPages::class),
             $domain,
         ]))->setPublic(true));
+
+        $conflict = $config['conflict_response'];
+        $policy   = $conflict['status'] === null && $conflict['retry_after'] === null
+            ? new Reference(ConflictResponsePolicy::class, ContainerInterface::NULL_ON_INVALID_REFERENCE)
+            : new Definition(ConflictResponsePolicy::class, [
+                $conflict['status'] ?? ConflictResponsePolicy::STATUS_CONFLICT,
+                $conflict['retry_after'] ?? ConflictResponsePolicy::DEFAULT_RETRY_AFTER,
+            ]);
+        $container->setDefinition(PermissionSetConflictListener::class, (new Definition(PermissionSetConflictListener::class, [$policy]))
+            ->addTag('kernel.event_listener', ['event' => KernelEvents::EXCEPTION, 'method' => 'onKernelException', 'priority' => PermissionSetConflictListener::PRIORITY]));
 
         $container->setDefinition(RbacAdminAccessListener::class, (new Definition(RbacAdminAccessListener::class, [
             new Reference(AccessGuard::class),

@@ -46,6 +46,12 @@ final class PermissionSetController extends AbstractController
     /** Accepted `code` route parameter (same alphabet as {@see PermissionSetManager::CODE_PATTERN}). */
     public const CODE_REQUIREMENT = '[a-z][a-z0-9_]{1,39}';
 
+    /** Header of a domain error answer (never a CONFLICT_* code: that is X-Conflict-Code, lock conflicts only). */
+    public const ERROR_CODE_HEADER = 'X-Error-Code';
+
+    /** 409 domain code: the set changed since the edit form was loaded (1.3); the page shows the current version. */
+    public const STALE_CODE = 'RBAC_PERMISSION_SET_STALE';
+
     /**
      * @param string $catalogueDomain translation domain of the permission and system set labels
      */
@@ -119,25 +125,42 @@ final class PermissionSetController extends AbstractController
     {
         $this->requireMutable();
         $set  = $this->editable($code);
-        $form = $this->form([
-            'name'        => $set->name ?? $this->translator?->trans($set->labelKey(), [], $this->catalogueDomain) ?? $set->code,
-            'description' => $set->description,
-            'permissions' => $set->permissions,
-        ], ActionForms::EDIT, $set->code, $this->generateUrl(RbacRoutes::EDIT, ['code' => $set->code]), false);
+        $form = $this->editForm($set);
         $form->handleRequest($request);
         if ($form->isSubmitted() && $form->isValid()) {
             $data = $this->data($form);
             try {
-                $this->manager->update($set->code, $data['name'], $data['description'], $data['permissions'], $this->guard->user());
+                $this->manager->updateRevision($set->code, $data['revision'], $data['name'], $data['description'], $data['permissions'], $this->guard->user());
                 $this->flash('success', 'flash.updated', ['%code%' => $set->code]);
 
                 return $this->redirectToRoute(RbacRoutes::PERMISSION_SETS);
             } catch (PermissionSetException $e) {
                 $this->flash('error', $e->getMessage());
+                if ($e->reason === PermissionSetException::STALE) {
+                    // 1.3 (REQ-RUNTIME-003 rule 4): another manager changed the set; show the current version.
+                    $current  = $this->editable($code);
+                    $response = $this->render($this->pages->template('form'), ['page' => $this->pages->form($this->editForm($current)->createView(), $current, $this->manager->canDelete())], new Response(null, Response::HTTP_CONFLICT));
+                    $response->headers->set(self::ERROR_CODE_HEADER, self::STALE_CODE);
+
+                    return $response;
+                }
             }
         }
 
         return $this->formResponse($form, $set);
+    }
+
+    /**
+     * @return FormInterface<mixed>
+     */
+    private function editForm(PermissionSet $set): FormInterface
+    {
+        return $this->form([
+            'name'        => $set->name ?? $this->translator?->trans($set->labelKey(), [], $this->catalogueDomain) ?? $set->code,
+            'description' => $set->description,
+            'permissions' => $set->permissions,
+            'revision'    => $set->revision ?? PermissionSet::UNSTORED,
+        ], ActionForms::EDIT, $set->code, $this->generateUrl(RbacRoutes::EDIT, ['code' => $set->code]), false);
     }
 
     /**
@@ -202,6 +225,7 @@ final class PermissionSetController extends AbstractController
             'method'                        => 'POST',
             'csrf_token_id'                 => ActionForms::tokenId($action, $target),
             'with_code'                     => $withCode,
+            'with_revision'                 => !$withCode,
             'permission_labels'             => array_map(static fn (Permission $permission): string => $permission->labelKey(), $this->catalog->all()),
             'permission_translation_domain' => $this->catalogueDomain,
         ]);
@@ -218,7 +242,7 @@ final class PermissionSetController extends AbstractController
     /**
      * @param FormInterface<mixed> $form
      *
-     * @return array{code: string, name: string, description: string|null, permissions: list<string>}
+     * @return array{code: string, name: string, description: string|null, permissions: list<string>, revision: string|null}
      */
     private function data(FormInterface $form): array
     {
@@ -232,6 +256,7 @@ final class PermissionSetController extends AbstractController
             'name'        => is_string($data['name'] ?? null) ? $data['name'] : '',
             'description' => is_string($description) ? $description : null,
             'permissions' => array_values(array_filter($permissions, is_string(...))),
+            'revision'    => is_string($data['revision'] ?? null) && $data['revision'] !== '' ? $data['revision'] : null,
         ];
     }
 

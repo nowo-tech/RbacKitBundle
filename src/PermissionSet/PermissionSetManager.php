@@ -27,7 +27,9 @@ use function trim;
  * Creates, edits and deletes permission sets. System sets can be edited (their first edit stores a row over the
  * configured default) but not deleted; `locked` sets cannot be changed. Deleting a custom set needs the usage provider
  * (`storage.usage_provider`) and is refused while the set is assigned; a code that is still assigned (stale host
- * assignments) cannot be created, so a re-created code never inherits old holders. Every change
+ * assignments) cannot be created, so a re-created code never inherits old holders. With a conditional storage
+ * ({@see ConditionalPermissionSetStorageInterface}, 1.3) a create never replaces a concurrent create of the same code
+ * and an edit never undoes a newer change ({@see self::updateRevision()}). Every change
  * is validated against the catalogue, bounded by `storage.max_sets`, refreshes the {@see PermissionSetRegistry} and
  * dispatches a {@see PermissionSetChangedEvent}. Stateless.
  */
@@ -84,7 +86,16 @@ final readonly class PermissionSetManager implements PermissionSetManagerInterfa
 
         $keys = $this->known($permissions);
         $row  = new StoredPermissionSet($code, $this->name($name), $this->description($description), false, $keys, $this->actorId($actor), $this->clock?->now());
-        $this->storage->save($row);
+        if ($this->storage instanceof ConditionalPermissionSetStorageInterface) {
+            // 1.3 (REQ-RUNTIME-003 rule 4): the unique code decides between two concurrent creates of one code.
+            if (!$this->storage->insert($row)) {
+                $this->invalidate();
+
+                throw PermissionSetException::of(PermissionSetException::CODE_TAKEN);
+            }
+        } else {
+            $this->storage->save($row);
+        }
         $this->enforceBound($row);
 
         return $this->changed(PermissionSetChangedEvent::CREATED, $code, ['permissions' => count($keys), 'added' => $keys, 'removed' => []], $actor);
@@ -99,10 +110,32 @@ final readonly class PermissionSetManager implements PermissionSetManagerInterfa
      */
     public function update(string $code, string $name, ?string $description, array $permissions, ?object $actor = null): PermissionSet
     {
+        return $this->updateRevision($code, null, $name, $description, $permissions, $actor);
+    }
+
+    /**
+     * Edits a set only while it is still the version the manager saw (1.3, REQ-RUNTIME-003 rule 4): `$revision` is
+     * the {@see PermissionSet::$revision} shown by the edit form, or {@see PermissionSet::UNSTORED} for a system set
+     * that had no stored edit then; null compares with the set as this call reads it (what {@see self::update()}
+     * does). A set changed since then is refused with {@see PermissionSetException::STALE}, a set deleted since then
+     * with {@see PermissionSetException::NOT_FOUND}: a stale form can neither grant a revoked permission again nor
+     * re-create a deleted set. With a storage that is not a {@see ConditionalPermissionSetStorageInterface} only the
+     * revision read here is compared, and the write itself is the storage's save().
+     *
+     * @param list<string> $permissions catalogued keys
+     *
+     * @throws PermissionSetException
+     */
+    public function updateRevision(string $code, ?string $revision, string $name, ?string $description, array $permissions, ?object $actor = null): PermissionSet
+    {
         $this->requireWritable();
         $set = $this->registry->find($code) ?? throw PermissionSetException::of(PermissionSetException::NOT_FOUND);
         if ($set->locked) {
             throw PermissionSetException::of(PermissionSetException::LOCKED);
+        }
+        $expected = $revision === null ? $set->revision : ($revision === PermissionSet::UNSTORED ? null : $revision);
+        if ($expected !== $set->revision) {
+            throw PermissionSetException::of(PermissionSetException::STALE);
         }
         if (!$set->stored && $this->registry->storedCount() >= $this->maxSets) {
             throw PermissionSetException::of(PermissionSetException::LIMIT);
@@ -110,7 +143,15 @@ final readonly class PermissionSetManager implements PermissionSetManagerInterfa
 
         $keys = $this->known($permissions);
         $row  = new StoredPermissionSet($code, $this->name($name), $this->description($description), $set->system, $keys, $this->actorId($actor), $this->clock?->now());
-        $this->storage->save($row);
+        if ($this->storage instanceof ConditionalPermissionSetStorageInterface) {
+            if (!$this->storage->replace($row, $expected)) {
+                $this->invalidate();
+
+                throw PermissionSetException::of($this->registry->find($code) instanceof PermissionSet ? PermissionSetException::STALE : PermissionSetException::NOT_FOUND);
+            }
+        } else {
+            $this->storage->save($row);
+        }
         if (!$set->stored) {
             $this->enforceBound($row);
         }

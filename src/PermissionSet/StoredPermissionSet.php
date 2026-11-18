@@ -9,11 +9,15 @@ use Throwable;
 
 use function array_filter;
 use function array_values;
+use function hash;
 use function is_array;
 use function is_bool;
 use function is_string;
+use function json_encode;
 
 use const DATE_ATOM;
+use const JSON_THROW_ON_ERROR;
+use const JSON_UNESCAPED_UNICODE;
 
 /**
  * One storage row: a custom permission set, or the edit of a system set. Plain data (cache-friendly array shape).
@@ -32,6 +36,24 @@ final readonly class StoredPermissionSet
         public ?string $updatedBy = null,
         public ?DateTimeImmutable $updatedAt = null,
     ) {
+    }
+
+    /**
+     * Revision of the row (1.3, REQ-RUNTIME-003 rule 4): a hash of everything it stores (the edit time to the second,
+     * the precision every supported database keeps), so a change made by anyone since a manager read the row gives
+     * another value. The admin form sends it back and {@see ConditionalPermissionSetStorageInterface::replace()}
+     * compares it under a row lock: a stale edit is refused instead of silently undoing the newer one.
+     */
+    public function revision(): string
+    {
+        return hash('sha256', json_encode([
+            $this->name,
+            $this->description,
+            $this->system,
+            $this->permissions,
+            $this->updatedBy,
+            $this->updatedAt?->getTimestamp(),
+        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
     }
 
     /**
