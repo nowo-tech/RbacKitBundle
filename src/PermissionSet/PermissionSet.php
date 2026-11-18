@@ -15,6 +15,9 @@ use function in_array;
  */
 final readonly class PermissionSet
 {
+    /** Revision an edit form sends for a set that had no stored row ({@see PermissionSetManager::updateRevision()}). */
+    public const UNSTORED = 'unstored';
+
     /**
      * @param string $code stable code (`^[a-z][a-z0-9_]{1,39}$`)
      * @param string|null $name name stored by an edit or a custom set (null = translate {@see self::$label})
@@ -26,6 +29,7 @@ final readonly class PermissionSet
      * @param bool $stored a storage row exists (custom set, or an edited system set)
      * @param string|null $updatedBy identifier of the last editor
      * @param DateTimeImmutable|null $updatedAt time of the last edit
+     * @param string|null $revision {@see StoredPermissionSet::revision()} of the stored row (null = not stored; 1.3)
      */
     public function __construct(
         public string $code,
@@ -38,6 +42,7 @@ final readonly class PermissionSet
         public bool $stored = false,
         public ?string $updatedBy = null,
         public ?DateTimeImmutable $updatedAt = null,
+        public ?string $revision = null,
     ) {
     }
 

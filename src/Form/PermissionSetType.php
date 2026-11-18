@@ -10,6 +10,7 @@ use Nowo\RbacKitBundle\NowoRbacKitBundle;
 use Nowo\RbacKitBundle\PermissionSet\PermissionSetManager;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
+use Symfony\Component\Form\Extension\Core\Type\HiddenType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
@@ -23,8 +24,9 @@ use function array_keys;
 
 /**
  * A permission set (POST + CSRF): code (create only), name, description and its permissions (checkboxes in catalogue
- * order, labels in the catalogue translation domain). Data: `array{code?: string, name: string, description:
- * string|null, permissions: list<string>}`. The controller passes the catalogue (`permission_labels`) and a CSRF
+ * order, labels in the catalogue translation domain), plus the hidden revision of the edited set (edit only, 1.3).
+ * Data: `array{code?: string, name: string, description: string|null, permissions: list<string>, revision?:
+ * string|null}`. The controller passes the catalogue (`permission_labels`) and a CSRF
  * token id bound to the action and the set (`nowo_rbac/create/new`, `nowo_rbac/edit/<code>`).
  *
  * @extends AbstractType<array<string, mixed>>
@@ -70,6 +72,10 @@ final class PermissionSetType extends AbstractType
             'choice_label'              => static fn (string $key): string => $labels[$key] ?? $key,
             'choice_translation_domain' => $options['permission_translation_domain'],
         ]);
+        if ($options['with_revision'] === true) {
+            // 1.3 (REQ-RUNTIME-003 rule 4): the revision the edit started from; a newer change refuses the save.
+            $this->addWithDefaults($builder, 'revision', HiddenType::class, ['required' => false]);
+        }
     }
 
     /**
@@ -84,11 +90,13 @@ final class PermissionSetType extends AbstractType
             'csrf_field_name'               => '_token',
             'translation_domain'            => NowoRbacKitBundle::TRANSLATION_DOMAIN,
             'with_code'                     => false,
+            'with_revision'                 => false,
             'permission_labels'             => [],
             'permission_translation_domain' => 'messages',
         ]);
         $resolver->setRequired('csrf_token_id');
         $resolver->setAllowedTypes('with_code', 'bool');
+        $resolver->setAllowedTypes('with_revision', 'bool');
         $resolver->setAllowedTypes('permission_labels', 'array');
         $resolver->setAllowedTypes('permission_translation_domain', 'string');
     }

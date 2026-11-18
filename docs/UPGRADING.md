@@ -16,6 +16,37 @@
 
 ## Unreleased
 
+From **1.2.x**: `composer update nowo-tech/rbac-kit-bundle --with-dependencies`. No database migration: the table
+`rbac_permission_set` is unchanged. See [CONCURRENCY.md](CONCURRENCY.md).
+
+- **New dependencies.** `nowo-tech/transaction-doctrine` ^1.6 and `nowo-tech/transaction-contract` ^1.0, and so
+  `doctrine/dbal`, even with `storage.type: config`. Registering `NowoTransactionDoctrineBundle` is optional. With it
+  (and `commit_detection`), a conflict after an earlier commit in the same request answers `CONFLICT_002`.
+- **Lock conflicts answer 409, not 500.** A deadlock, lock wait timeout or serialization failure on an admin page now
+  answers 409 with `X-Conflict-Code: CONFLICT_001` and `Retry-After`, or `CONFLICT_002` without `Retry-After`. Set
+  `nowo_rbac_kit.conflict_response.status: 503` to answer 503 instead. Unique violations and lost connections are not
+  mapped.
+- **Stale edits answer 409.** The edit form has a new hidden field `revision`. A save from a form opened before
+  another manager changed the set is refused: status 409, `X-Error-Code: RBAC_PERMISSION_SET_STALE`, flash
+  `error.stale`, and the page shows the current version. If you override `admin/form.html.twig`, render the whole form
+  (the scaffold's child loop or `form_rest`) so the field is sent. A POST without the field is compared with the set as
+  that request reads it.
+- **Two creates of the same code.** The second one gets `code_taken`. Before, it failed with a 500 or replaced the first
+  set.
+- **Code calling the manager.** `PermissionSetManagerInterface::update()` is unchanged. It now throws
+  `PermissionSetException` with reason `stale` when the set changes between its read and its write. Catch it with the
+  other reasons. To check against the revision your own form showed, call `PermissionSetManager::updateRevision()`
+  with `PermissionSet::$revision`, or `PermissionSet::UNSTORED` for a system set without a stored edit. A lock
+  conflict reaches your code as `Nowo\TransactionContract\TransientStorageFailure`.
+- **Custom storages (`storage.type: service`).** They keep working unchanged. Implement
+  `ConditionalPermissionSetStorageInterface` (`insert()` and `replace()`) to get the same guarantees as the Doctrine
+  storage.
+- **PostgreSQL.** The bundle's own write transactions set `lock_timeout` to 5 s. Inside your transaction your session
+  settings apply.
+
+The bundle never passes the host's entity manager to the runner (`forConnection()`, DBAL only), so
+`forHostEntityManager()`'s `LogicException` on unflushed host edits cannot come from RbacKit.
+
 ## To 1.2.1
 
 From **1.2.0**:

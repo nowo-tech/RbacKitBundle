@@ -8,6 +8,7 @@ use Nowo\RbacKitBundle\Permission\Permission;
 use Nowo\RbacKitBundle\Permission\PermissionScope;
 use Nowo\RbacKitBundle\PermissionSet\PermissionSetManager;
 use Nowo\RbacKitBundle\Ui\RbacPages;
+use Nowo\TransactionDoctrine\Symfony\Conflict\ConflictResponsePolicy;
 use Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition;
 use Symfony\Component\Config\Definition\Builder\TreeBuilder;
 use Symfony\Component\Config\Definition\ConfigurationInterface;
@@ -80,6 +81,7 @@ final class Configuration implements ConfigurationInterface
         $this->addCoverage($children->arrayNode('coverage'));
         $this->addWebUi($children->arrayNode('web_ui'));
         $this->addSecurity($children->arrayNode('security'));
+        $this->addConflictResponse($children->arrayNode('conflict_response'));
         $children->end();
 
         $root
@@ -266,6 +268,31 @@ final class Configuration implements ConfigurationInterface
             ->validate()
                 ->ifTrue(static fn (array $v): bool => ($v['type'] ?? null) === 'service' && (!is_string($v['service'] ?? null) || trim($v['service']) === ''))
                 ->thenInvalid('nowo_rbac_kit.storage.service must name a PermissionSetStorageInterface service when storage.type is "service", got %s.')
+            ->end();
+    }
+
+    /**
+     * 1.3 (REQ-RUNTIME-003 rule 6): answer of a lock conflict on the admin pages.
+     */
+    private function addConflictResponse(ArrayNodeDefinition $node): void
+    {
+        $node
+            ->info('1.3 (REQ-RUNTIME-003): answer of a lock conflict (deadlock, lock wait timeout, serialization failure) on the admin pages. Unset: nowo-tech/transaction-doctrine\'s conflict_response when that bundle is registered, else 409 with Retry-After 1.')
+            ->addDefaultsIfNotSet()
+            ->children()
+                ->integerNode('status')
+                    ->info('409 (default, X-Conflict-Code CONFLICT_001 / CONFLICT_002) or 503. Null: follow transaction-doctrine, else 409.')
+                    ->defaultNull()
+                    ->validate()
+                        ->ifTrue(static fn (mixed $v): bool => $v !== null && !in_array($v, ConflictResponsePolicy::STATUSES, true))
+                        ->thenInvalid('nowo_rbac_kit.conflict_response.status must be 409 or 503, got %s.')
+                    ->end()
+                ->end()
+                ->integerNode('retry_after')
+                    ->info('Retry-After seconds of a CONFLICT_001 answer. Null: follow transaction-doctrine, else 1.')
+                    ->defaultNull()
+                    ->min(0)
+                ->end()
             ->end();
     }
 

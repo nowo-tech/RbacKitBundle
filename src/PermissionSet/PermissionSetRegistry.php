@@ -133,12 +133,13 @@ final class PermissionSetRegistry implements ResetInterface
                 $row instanceof StoredPermissionSet,
                 $row?->updatedBy,
                 $row?->updatedAt,
+                $row?->revision(),
             );
         }
 
         $custom = [];
         foreach ($stored as $code => $row) {
-            $custom[$code] = new PermissionSet($code, $row->name, null, $row->description, false, false, $this->known($code, $row->permissions, $catalogue, $unknown), true, $row->updatedBy, $row->updatedAt);
+            $custom[$code] = new PermissionSet($code, $row->name, null, $row->description, false, false, $this->known($code, $row->permissions, $catalogue, $unknown), true, $row->updatedBy, $row->updatedAt, $row->revision());
         }
         uasort($custom, static fn (PermissionSet $a, PermissionSet $b): int => strcmp((string) $a->name, (string) $b->name) ?: strcmp($a->code, $b->code));
 
