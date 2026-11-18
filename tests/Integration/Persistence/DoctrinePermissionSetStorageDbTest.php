@@ -172,6 +172,25 @@ final class DoctrinePermissionSetStorageDbTest extends TestCase
         self::assertTrue($this->storage($em)->insert(new StoredPermissionSet('ops', 'Ops', null, false, [])));
     }
 
+    public function testOwnTransactionsBoundTheLockWaitOnPostgreSql(): void
+    {
+        $real       = $this->entityManager('pdo-sqlite:///:memory:');
+        $connection = $this->createMock(Connection::class);
+        $connection->method('isTransactionActive')->willReturn(false);
+        $connection->method('getDatabasePlatform')->willReturn(new PostgreSQLPlatform());
+        $connection->expects(self::once())->method('beginTransaction');
+        $connection->expects(self::once())->method('executeStatement')->with("SET LOCAL lock_timeout = '250ms'");
+        $connection->expects(self::once())->method('delete')->with('rbac_permission_set', ['code' => 'ops']);
+        $connection->expects(self::once())->method('commit');
+        $em = $this->createStub(EntityManagerInterface::class);
+        $em->method('getConnection')->willReturn($connection);
+        $em->method('getClassMetadata')->willReturn($real->getClassMetadata(PermissionSetRecord::class));
+        $registry = $this->createStub(ManagerRegistry::class);
+        $registry->method('getManagerForClass')->willReturn($em);
+
+        (new DoctrinePermissionSetStorage($registry, null, 250))->delete('ops');
+    }
+
     public function testAFailingSavepointRollbackNeverHidesTheOriginalError(): void
     {
         $real       = $this->entityManager('pdo-sqlite:///:memory:');
