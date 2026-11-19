@@ -1061,11 +1061,11 @@
         },
         {
             "name": "nowo-tech/rbac-kit-bundle",
-            "version": "dev-main",
+            "version": "dev-ci/deps-floor",
             "dist": {
                 "type": "path",
                 "url": "/var/rbac-kit-bundle",
-                "reference": "b9c4ddba7737638e88b3d083ad955a25635bad7c"
+                "reference": "b3d14b3dec86dd8e6c6b43eee2e5c103ee1860c5"
             },
             "require": {
                 "nowo-tech/form-kit-bundle": "^2.17",
@@ -1331,16 +1331,16 @@
         },
         {
             "name": "nowo-tech/transaction-doctrine",
-            "version": "v1.6.0",
+            "version": "v1.6.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/nowo-tech/transaction-doctrine.git",
-                "reference": "707309320afbe69add2450ed31f67d32f888fe93"
+                "reference": "2508e7689c0051c28ca8532a4cdf31ca7bfff311"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/nowo-tech/transaction-doctrine/zipball/707309320afbe69add2450ed31f67d32f888fe93",
-                "reference": "707309320afbe69add2450ed31f67d32f888fe93",
+                "url": "https://api.github.com/repos/nowo-tech/transaction-doctrine/zipball/2508e7689c0051c28ca8532a4cdf31ca7bfff311",
+                "reference": "2508e7689c0051c28ca8532a4cdf31ca7bfff311",
                 "shasum": ""
             },
             "require": {
@@ -1436,8 +1436,8 @@
                 "issues": "https://github.com/nowo-tech/transaction-doctrine/issues",
                 "source": "https://github.com/nowo-tech/transaction-doctrine"
             },
-            "time": "2026-11-18T15:30:13+00:00",
-            "published-time": "2026-11-18T15:33:30+00:00"
+            "time": "2026-11-18T23:35:00+00:00",
+            "published-time": "2026-11-18T23:37:46+00:00"
         },
         {
             "name": "nowo-tech/ui-kit-bundle",
