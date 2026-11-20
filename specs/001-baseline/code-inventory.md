@@ -2,9 +2,9 @@
 
 **Baseline spec**: [`spec.md`](spec.md)  
 **Package**: `nowo-tech/rbac-kit-bundle`  
-**Last audited**: 2026-11-13
+**Last audited**: 2026-11-20 (v1.3.0)
 
-Scope: every file under `src/`. Audit command: `find src -type f | wc -l` → **80**.
+Scope: every file under `src/`. Audit command: `find src -type f | wc -l` → **82**.
 
 ## Bundle and dependency injection
 
@@ -36,6 +36,7 @@ Scope: every file under `src/`. Audit command: `find src -type f | wc -l` → **
 | `src/Doctrine/TablePrefixListener.php` | Permission sets | FR-SET-003 |
 | `src/Entity/PermissionSetRecord.php` | Permission sets | FR-SET-003 |
 | `src/Event/PermissionSetChangedEvent.php` | Permission sets | FR-SET-004 |
+| `src/PermissionSet/ConditionalPermissionSetStorageInterface.php` | Permission sets | FR-SET-003, FR-SET-004 |
 | `src/PermissionSet/ConfigPermissionSetStorage.php` | Permission sets | FR-SET-003 |
 | `src/PermissionSet/DoctrinePermissionSetStorage.php` | Permission sets | FR-SET-003 |
 | `src/PermissionSet/PermissionSet.php` | Permission sets | FR-SET-001 |
@@ -98,6 +99,7 @@ Scope: every file under `src/`. Audit command: `find src -type f | wc -l` → **
 | Source file | Spec section | Requirement IDs |
 | --- | --- | --- |
 | `src/EventListener/RbacAdminAccessListener.php` | Admin UI security | FR-SEC-001 |
+| `src/EventListener/PermissionSetConflictListener.php` | Admin UI security | FR-UI-001, FR-SEC-001 |
 | `src/Security/AccessGuard.php` | Admin UI security | FR-SEC-001 |
 | `src/Security/AllowAllRbacAdminAccessChecker.php` | Admin UI security | FR-SEC-001 |
 | `src/Security/ConfigurableRbacAdminAccessChecker.php` | Admin UI security | FR-SEC-001 |
@@ -137,13 +139,13 @@ Scope: every file under `src/`. Audit command: `find src -type f | wc -l` → **
 | --- | --- |
 | Bundle and dependency injection | 8 |
 | Catalogue | 5 |
-| Permission sets | 14 |
+| Permission sets | 15 |
 | Grants and contexts | 15 |
 | Voter and entry points | 12 |
 | Coverage | 3 |
-| Admin UI security | 5 |
+| Admin UI security | 6 |
 | Admin UI (HTTP, forms, view models, Twig) | 11 |
 | Translations | 7 |
-| **Total production sources** | **80** |
+| **Total production sources** | **82** |
 
-Mapped 80 / 80 files under `src/` (100%). No generated or build output is shipped under `src/`.
+Mapped 82 / 82 files under `src/` (100%). No generated or build output is shipped under `src/`.
