@@ -1,38 +1,36 @@
 {% extends 'base.html.twig' %}
 
-{% block body %}
-    <h1>What can {{ app.user ? app.user.userIdentifier : 'a guest' }} do?</h1>
-    {% if not app.user %}
-        <p><a class="nowo-ui-btn nowo-ui-btn--primary nowo-ui-btn--sm" href="{{ path('demo_sign_in') }}" data-testid="demo-sign-in">Sign in</a> — a guest holds no permission set.</p>
-    {% endif %}
-    <p class="nowo-ui-muted">
-        Roles are permission sets held per project; a user's permissions in a project are the union of every set held
-        there. Every cell below is <code>rbac_can('key', project)</code>. Demo users: <code>admin</code> (bypass),
-        <code>alice</code> (viewer of both projects + triage in Billing), <code>bob</code> (auditor, global),
-        <code>carol</code> (owner of Mobile); the password is the user name.
-    </p>
+{% block nowo_ui_page_header %}
+    {% set _toolbar %}
+        {% if not app.user %}<a class="nowo-ui-btn nowo-ui-btn--primary" href="{{ path('demo_sign_in') }}" data-testid="demo-sign-in">Sign in</a>{% endif %}
+    {% endset %}
+    {{ include(nowo_ui_partial('page_header'), {
+        title: 'What can ' ~ (app.user ? app.user.userIdentifier : 'a guest') ~ ' do?',
+        intro: (app.user ? '' : 'A guest holds no permission set. ') ~ 'Roles are permission sets held per project; a user\'s permissions in a project are the union of every set held there. Every cell below is rbac_can(\'key\', project). Demo users: admin (bypass), alice (viewer of both projects + triage in Billing), bob (auditor, global), carol (owner of Mobile); the password is the user name.',
+        toolbar: _toolbar|trim,
+    }) }}
+{% endblock %}
 
-    <section class="nowo-ui-card">
-        <div class="nowo-ui-card__header"><h2 class="nowo-ui-card__title">General</h2></div>
-        <div class="nowo-ui-card__body">
+{% block body %}
+    {% embed '@NowoUiKit/demo_platform/_section.html.twig' with {title: 'General', kind: 'list'} %}
+        {% block section_body %}
             <ul data-testid="demo-general">
                 <li>View reports: <strong>{{ rbac_can('reports.view') ? 'yes' : 'no' }}</strong></li>
                 <li>Export reports: <strong>{{ rbac_can('reports.export') ? 'yes' : 'no' }}</strong></li>
             </ul>
-        </div>
-    </section>
+        {% endblock %}
+    {% endembed %}
 
-    <section class="nowo-ui-card">
-        <div class="nowo-ui-card__header"><h2 class="nowo-ui-card__title">Per project</h2></div>
-        <div class="nowo-ui-card__body">
+    {% embed '@NowoUiKit/demo_platform/_section.html.twig' with {title: 'Per project', kind: 'table', empty: projects|length == 0, state_message: 'No projects.', projects: projects} %}
+        {% block section_body %}
             <table class="nowo-ui-data-table" data-testid="demo-matrix">
                 <thead>
-                    <tr><th>Project</th><th>Open</th><th>Triage issues</th><th>Settings</th><th>Manage members</th></tr>
+                    <tr><th scope="col">Project</th><th scope="col">Open</th><th scope="col">Triage issues</th><th scope="col">Settings</th><th scope="col">Manage members</th></tr>
                 </thead>
                 <tbody>
                     {% for project in projects %}
                         <tr data-project="{{ project.slug }}">
-                            <th>
+                            <th scope="row">
                                 {% if rbac_can('project.view', project) %}<a class="nowo-ui-link" href="{{ path('demo_project', {project: project.slug}) }}">{{ project.name }}</a>{% else %}{{ project.name }}{% endif %}
                             </th>
                             {% for key in ['project.view', 'project.issues.triage', 'project.settings.view', 'project.members.manage'] %}
@@ -42,6 +40,6 @@
                     {% endfor %}
                 </tbody>
             </table>
-        </div>
-    </section>
+        {% endblock %}
+    {% endembed %}
 {% endblock %}

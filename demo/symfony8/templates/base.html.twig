@@ -1,28 +1,25 @@
-{#- REQ-DEMO-014: the demo shell is UiKit's admin layout with UiKit's default theme (nowo-ui.css from the bundle's own
-    asset package, no CSS framework, no CDN). It is also the host layout of the RBAC Kit admin pages
-    (nowo_ui_kit.layouts.admin). The header menu shows only what the signed-in user may open. -#}
-{% extends '@NowoUiKit/layout/admin.html.twig' %}
+{#- REQ-DEMO-014: the demo runs inside UiKit's shared demo platform shell (@NowoUiKit/demo_platform/layout.html.twig):
+    the same top bar, aside, content width, theme and footer as every other nowo-tech bundle demo. This file only
+    declares the demo (nowo_ui_demo_platform); it is also the host layout of the RBAC Kit admin pages
+    (nowo_ui_kit.layouts.admin). The menu shows only what the signed-in user may open. -#}
+{% extends '@NowoUiKit/demo_platform/layout.html.twig' %}
+{% set _demo_nav = [{label: 'My access', route: 'demo_home'}] %}
+{% if rbac_can_route('demo_reports') %}
+    {% set _demo_nav = _demo_nav|merge([{label: 'Reports', route: 'demo_reports', section: 'Demo pages', testid: 'demo-nav-reports'}]) %}
+{% endif %}
+{% if is_granted('ROLE_ADMIN') %}
+    {% set _demo_nav = _demo_nav|merge([
+        {label: 'Permission sets', route: 'nowo_rbac_kit_permission_sets', active: ['nowo_rbac_kit_permission*'], section: 'RBAC Kit admin', testid: 'demo-nav-admin'},
+        {label: 'Catalogue', route: 'nowo_rbac_kit_catalogue', section: 'RBAC Kit admin'},
+    ]) %}
+{% endif %}
+{% set nowo_ui_demo_platform = {
+    bundle: 'RBAC Kit',
+    home_route: 'demo_home',
+    repository: 'https://github.com/nowo-tech/RbacKitBundle',
+    translation_domain: false,
+    locales: [],
+    nav: _demo_nav,
+} %}
 
 {% block nowo_ui_document_title %}{% block title %}RBAC Kit Demo{% endblock %}{% endblock %}
-
-{% block nowo_ui_navigation %}
-    {% set _route = app.request.attributes.get('_route')|default('') %}
-    <header class="nowo-ui-header" data-testid="demo-masthead">
-        <a class="nowo-ui-brand" href="{{ path('demo_home') }}">RBAC Kit Bundle Demo</a>
-        <nav class="nowo-ui-menu" aria-label="Demo">
-            <a class="nowo-ui-link" href="{{ path('demo_home') }}"{% if _route == 'demo_home' %} aria-current="page"{% endif %}>My access</a>
-            {% if rbac_can_route('demo_reports') %}
-                <a class="nowo-ui-link" href="{{ path('demo_reports') }}" data-testid="demo-nav-reports"{% if _route == 'demo_reports' %} aria-current="page"{% endif %}>Reports</a>
-            {% endif %}
-            {% if is_granted('ROLE_ADMIN') %}
-                <a class="nowo-ui-link" href="{{ path('nowo_rbac_kit_permission_sets') }}" data-testid="demo-nav-admin"{% if _route starts with 'nowo_rbac_kit_permission' %} aria-current="page"{% endif %}>Permission sets</a>
-                <a class="nowo-ui-link" href="{{ path('nowo_rbac_kit_catalogue') }}"{% if _route == 'nowo_rbac_kit_catalogue' %} aria-current="page"{% endif %}>Catalogue</a>
-            {% endif %}
-        </nav>
-        {% if app.user %}
-            <span class="nowo-ui-muted" data-testid="demo-user">Signed in as {{ app.user.userIdentifier }}</span>
-        {% endif %}
-    </header>
-{% endblock %}
-
-{% block nowo_ui_content %}{% block body %}{% endblock %}{% endblock %}
