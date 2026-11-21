@@ -1,11 +1,21 @@
 {% extends 'base.html.twig' %}
 
+{% block nowo_ui_page_header %}
+    {% set _toolbar %}<a class="nowo-ui-btn nowo-ui-btn--outline" href="{{ path('demo_home') }}">Back</a>{% endset %}
+    {{ include(nowo_ui_partial('page_header'), {
+        title: project.name ~ (settings|default(false) ? ' — settings' : ''),
+        intro: 'The RbacKit request guard let you in: you hold ' ~ (settings|default(false) ? 'project.settings.view' : 'project.view') ~ ' in this project.',
+        toolbar: _toolbar,
+    }) }}
+{% endblock %}
+
 {% block body %}
-    <h1 data-testid="demo-project">{{ project.name }}{{ settings|default(false) ? ' — settings' : '' }}</h1>
-    <p>The RbacKit request guard let you in: you hold <code>{{ settings|default(false) ? 'project.settings.view' : 'project.view' }}</code> in this project.</p>
-    <ul>
-        {% if rbac_can('project.issues.triage', project) %}<li>Triage buttons are shown (<code>project.issues.triage</code>).</li>{% endif %}
-        {% if rbac_can('project.settings.view', project) %}<li><a class="nowo-ui-link" href="{{ path('demo_project_settings', {project: project.slug}) }}">Settings</a></li>{% endif %}
-    </ul>
-    <p><a class="nowo-ui-link" href="{{ path('demo_home') }}">Back</a></p>
+    {% embed '@NowoUiKit/demo_platform/_section.html.twig' with {title: 'What you can do here', kind: 'list', project: project} %}
+        {% block section_body %}
+            <ul>
+                {% if rbac_can('project.issues.triage', project) %}<li>Triage buttons are shown (<code>project.issues.triage</code>).</li>{% endif %}
+                {% if rbac_can('project.settings.view', project) %}<li><a class="nowo-ui-link" href="{{ path('demo_project_settings', {project: project.slug}) }}">Settings</a></li>{% endif %}
+            </ul>
+        {% endblock %}
+    {% endembed %}
 {% endblock %}

@@ -5,22 +5,9 @@ export function as(user: string): { httpCredentials: { username: string; passwor
   return { httpCredentials: { username: user, password: user, send: 'always' } };
 }
 
-/** Wait until the Symfony Web Debug Toolbar has finished loading (optional outside dev). */
+/** Hide the Symfony Web Debug Toolbar (dev chrome) so it never appears in a capture. */
 export async function waitForWebProfiler(page: Page): Promise<void> {
-  await page.waitForSelector('.sf-toolbar', { state: 'visible', timeout: 20000 }).catch(() => undefined);
-  await page
-    .waitForFunction(
-      () => {
-        const bar = document.querySelector('.sf-toolbar') as HTMLElement | null;
-        if (!bar || bar.offsetParent === null) {
-          return true;
-        }
-        return !!document.querySelector('.sf-toolbar-block');
-      },
-      { timeout: 25000, polling: 250 },
-    )
-    .catch(() => undefined);
-  await new Promise((r) => setTimeout(r, 400));
+  await page.addStyleTag({ content: '.sf-toolbar,.sf-minitoolbar,[id^="sfwdt"]{display:none!important}' });
 }
 
 /** Rows of a list page (`data-testid` of the page section). */

@@ -1,13 +1,21 @@
 {% extends 'base.html.twig' %}
 
+{% block nowo_ui_page_header %}
+    {{ include(nowo_ui_partial('page_header'), {
+        title: 'Reports',
+        intro: 'A general page: shown when a global set grants reports.view, or at least one of your projects does (the key is flagged aggregate).',
+    }) }}
+{% endblock %}
+
 {% block body %}
-    <h1 data-testid="demo-reports">Reports</h1>
-    <p>A general page: shown when a global set grants <code>reports.view</code>, or at least one of your projects does (the key is flagged <code>aggregate</code>).</p>
-    <p>Projects whose data this page may show:</p>
-    <ul>
-        {% for project in projects %}
-            {% if rbac_can('project.view', project) %}<li>{{ project.name }}</li>{% endif %}
-        {% endfor %}
-    </ul>
-    {% if rbac_can('reports.export') %}<p data-testid="demo-export">Export is available (<code>reports.export</code>).</p>{% endif %}
+    {% embed '@NowoUiKit/demo_platform/_section.html.twig' with {title: 'Projects this page may show', kind: 'list', projects: projects} %}
+        {% block section_body %}
+            <ul>
+                {% for project in projects %}
+                    {% if rbac_can('project.view', project) %}<li>{{ project.name }}</li>{% endif %}
+                {% endfor %}
+            </ul>
+            {% if rbac_can('reports.export') %}<p data-testid="demo-export">Export is available (<code>reports.export</code>).</p>{% endif %}
+        {% endblock %}
+    {% endembed %}
 {% endblock %}
