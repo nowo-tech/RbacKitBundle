@@ -249,16 +249,16 @@
         },
         {
             "name": "nowo-tech/form-kit-bundle",
-            "version": "v2.23.0",
+            "version": "v2.24.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/nowo-tech/FormKitBundle.git",
-                "reference": "1a95181865f6f7f2dd076fb6b1e32c0a41e23634"
+                "reference": "4725ea02f88eceb6f5ff01f0d884a69c98958047"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/nowo-tech/FormKitBundle/zipball/1a95181865f6f7f2dd076fb6b1e32c0a41e23634",
-                "reference": "1a95181865f6f7f2dd076fb6b1e32c0a41e23634",
+                "url": "https://api.github.com/repos/nowo-tech/FormKitBundle/zipball/4725ea02f88eceb6f5ff01f0d884a69c98958047",
+                "reference": "4725ea02f88eceb6f5ff01f0d884a69c98958047",
                 "shasum": ""
             },
             "require": {
@@ -279,7 +279,7 @@
                 "friendsofphp/php-cs-fixer": "^3.95.11",
                 "igor-php/igor-php": "^0.10.0",
                 "nowo-tech/phpstan-frankenphp": "^1.0",
-                "nowo-tech/ui-kit-bundle": "^2.43",
+                "nowo-tech/ui-kit-bundle": "^2.64",
                 "phpstan/extension-installer": "^1.2",
                 "phpstan/phpstan": "^2.0",
                 "phpstan/phpstan-phpunit": "^2.0",
@@ -308,7 +308,7 @@
                 "nowo-tech/slide-to-confirm-bundle": "For addSlideToConfirm() / addSlideToConfirmField() / addSlideToConfirmFieldType()",
                 "nowo-tech/tag-input-bundle": "For addTagInput() / addTagInputField() / addTagInputFieldType()",
                 "nowo-tech/tiptap-editor-bundle": "For addTiptapEditor() / addTiptapEditorField() / addTiptapEditorFieldType()",
-                "nowo-tech/ui-kit-bundle": "^2.43.1: the visible_when option's rows are hidden by the visible-when peer with chained rules (^2.23 without chains); ^2.43.0: the crop option on FileType gets translated dialog labels (UiKit ImageCrop) and the image-crop script that reads its attributes; ^2.37.0: addEmojiPicker() / addEmojiPickerField() / addEmojiPickerFieldType() (emoji picker field); ^2.15.0: addDateRange() / addDateRangeField() / addDateRangeFieldType() (date range filter field); ^2.5.3: locale tabs (locale_tabs option, TranslatableMapType, _locale_tabs include) render through the UiKit locale_tabs partial (WAI-ARIA tabs, no-JS fieldsets, keyboard, browser validation, Live Component safe); without it FormKit keeps its neutral markup",
+                "nowo-tech/ui-kit-bundle": "^2.64.0: the ui_widget option (option_cards: clickable radio / checkbox cards on an expanded ChoiceType; FormKit's own cards without it); ^2.43.1: the visible_when option's rows are hidden by the visible-when peer with chained rules (^2.23 without chains); ^2.43.0: the crop option on FileType gets translated dialog labels (UiKit ImageCrop) and the image-crop script that reads its attributes; ^2.37.0: addEmojiPicker() / addEmojiPickerField() / addEmojiPickerFieldType() (emoji picker field); ^2.15.0: addDateRange() / addDateRangeField() / addDateRangeFieldType() (date range filter field); ^2.5.3: locale tabs (locale_tabs option, TranslatableMapType, _locale_tabs include) render through the UiKit locale_tabs partial (WAI-ARIA tabs, no-JS fieldsets, keyboard, browser validation, Live Component safe); without it FormKit keeps its neutral markup",
                 "symfony/security-csrf": "Required by CsrfOnlyType / HiddenFieldsCsrfType / CsrfOnlyFormFactory / csrf_action_form(): without the form CSRF extension they throw (fail closed)",
                 "symfony/ux-autocomplete": "Entity autocomplete fields; use addAutocompleteField() / addAutocompleteFieldType() with your autocomplete FormType FQCN",
                 "symfony/ux-cropperjs": "For addCropper() / addCropperField() / addCropperFieldType() (image crop widget)",
@@ -362,7 +362,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-11-13T18:29:32+00:00"
+            "time": "2026-11-22T08:35:57+00:00"
         },
         {
             "name": "nowo-tech/transaction-contract",
@@ -435,16 +435,16 @@
         },
         {
             "name": "nowo-tech/transaction-doctrine",
-            "version": "v1.8.1",
+            "version": "v1.9.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/nowo-tech/transaction-doctrine.git",
-                "reference": "58724e0ca8c3ebe3ff8c675b22a329a3d83d2ea3"
+                "reference": "d6a3176e8c09f10ef0f94223088c30f03fd51fd5"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/nowo-tech/transaction-doctrine/zipball/58724e0ca8c3ebe3ff8c675b22a329a3d83d2ea3",
-                "reference": "58724e0ca8c3ebe3ff8c675b22a329a3d83d2ea3",
+                "url": "https://api.github.com/repos/nowo-tech/transaction-doctrine/zipball/d6a3176e8c09f10ef0f94223088c30f03fd51fd5",
+                "reference": "d6a3176e8c09f10ef0f94223088c30f03fd51fd5",
                 "shasum": ""
             },
             "require": {
@@ -541,20 +541,20 @@
                 "issues": "https://github.com/nowo-tech/transaction-doctrine/issues",
                 "source": "https://github.com/nowo-tech/transaction-doctrine"
             },
-            "time": "2026-11-20T09:09:22+00:00"
+            "time": "2026-11-21T17:23:37+00:00"
         },
         {
             "name": "nowo-tech/ui-kit-bundle",
-            "version": "v2.59.0",
+            "version": "v2.68.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/nowo-tech/UiKitBundle.git",
-                "reference": "580b05d1d70a010e249aa9ff3ec6265436d9f4d5"
+                "reference": "b88274f85f5edbe2976debe53b0b6a766e7cba96"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/nowo-tech/UiKitBundle/zipball/580b05d1d70a010e249aa9ff3ec6265436d9f4d5",
-                "reference": "580b05d1d70a010e249aa9ff3ec6265436d9f4d5",
+                "url": "https://api.github.com/repos/nowo-tech/UiKitBundle/zipball/b88274f85f5edbe2976debe53b0b6a766e7cba96",
+                "reference": "b88274f85f5edbe2976debe53b0b6a766e7cba96",
                 "shasum": ""
             },
             "require": {
@@ -601,7 +601,8 @@
                 "symfony/validator": "Colour validation in the optional appearance forms"
             },
             "bin": [
-                "bin/nowo-ui-token-lint"
+                "bin/nowo-ui-token-lint",
+                "bin/nowo-ui-demo-style-lint"
             ],
             "type": "symfony-bundle",
             "autoload": {
@@ -643,7 +644,7 @@
                 "issues": "https://github.com/nowo-tech/UiKitBundle/issues",
                 "source": "https://github.com/nowo-tech/UiKitBundle"
             },
-            "time": "2026-11-19T21:24:18+00:00"
+            "time": "2026-11-23T05:57:27+00:00"
         },
         {
             "name": "psr/cache",
@@ -6285,22 +6286,23 @@
         },
         {
             "name": "nowo-tech/dashboard-menu-bundle",
-            "version": "v2.21.1",
+            "version": "v2.23.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/nowo-tech/DashboardMenuBundle.git",
-                "reference": "011e59b73dcb3858b77ced29c6dfded045660a13"
+                "reference": "2d2d0cb99d03ad0c78845ce1dae66cbada55e453"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/nowo-tech/DashboardMenuBundle/zipball/011e59b73dcb3858b77ced29c6dfded045660a13",
-                "reference": "011e59b73dcb3858b77ced29c6dfded045660a13",
+                "url": "https://api.github.com/repos/nowo-tech/DashboardMenuBundle/zipball/2d2d0cb99d03ad0c78845ce1dae66cbada55e453",
+                "reference": "2d2d0cb99d03ad0c78845ce1dae66cbada55e453",
                 "shasum": ""
             },
             "require": {
                 "doctrine/doctrine-bundle": "^2.8 || ^3.0",
                 "doctrine/orm": "^3.7",
                 "nowo-tech/form-kit-bundle": "^2.13",
+                "nowo-tech/transaction-doctrine": "^1.6",
                 "nowo-tech/ui-kit-bundle": "^2.5.1",
                 "php": ">=8.2 <8.6",
                 "psr/cache": "^1.0 || ^2.0 || ^3.0",
@@ -6393,7 +6395,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-11-13T06:06:55+00:00"
+            "time": "2026-11-18T22:58:03+00:00"
         },
         {
             "name": "nowo-tech/phpstan-frankenphp",
